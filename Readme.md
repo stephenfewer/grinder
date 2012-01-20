@@ -48,6 +48,7 @@ Note: Grinder nodes are intended to be installed on Windows systems, but as they
 * Edit the config.rb file to suit your setup. Please see the default config.rb file for a description of the various options. You may create multiple config files if you intend on running more than one node on a system, (e.g. config_g1.rb, config_g2.rb). You can then specify on the command line which config file to use when bringing up the node. If you have setup a Grinder server, use the same Grinder Key and the appropriate server URL so the node can communicate with the Grinder server.
 
 * Finally to run the node issue a Ruby command as shown below where the browser parameter is the browser you want to fuzz (e.g. IE or CM).
+
 > .\grinder\node\>ruby grinder.rb <browser> [--config=c:\path\to\alternative\config.rb]
 
 Setting Up Encryption For Crash Information
@@ -58,11 +59,13 @@ When a Grinder Node generates a crash in a browser, two files are created within
 A Grinder Node can be configured to use an RSA public key to encrypt this information for storage both locally on the respective Node as well as for transmission and storage on the Grinder Server. Simply generate a suitable public key (details below) and edit the config.rb to use this key. Now when you download the crash/log files from the Grinder Server you will need to decrypt them before you can use them.
 
 To generate a suitable key pair you can use the included crypto.rb utility:
+
 > .\grinder\node\>ruby crypto.rb /generate /pubkey public.pem /privkey private.pem [/keysize 4096] [/keypass MyKeYpAsSwOrD]
 
 The generated public key will need to be copied over to all the Grinder Nodes while the private key will need to be stored securely on the analyst's workstations.
 
 To decrypt an encrypted crash/log file you can then use the following command:
+
 > .\grinder\node\>ruby crypto.rb /decrypt /privkey private.pem /inputfile XXXXXXXX.XXXXXXXX.crash [/outputfile plaintext.txt] [/keypass MyKeYpAsSwOrD]
 
 Generating a Testcase From a Log File

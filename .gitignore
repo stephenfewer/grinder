@@ -8,3 +8,4 @@ node/source/logger/Debug/
 node/source/logger/logger.vcproj.*.user
 node/source/logger/*.ncb
 node/source/logger/*.suo
+desktop.ini

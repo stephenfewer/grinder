@@ -8,7 +8,7 @@ Grinder Screenshots
 
 ![Grinder Server Screenshot 1](https://github.com/stephenfewer/grinder/raw/master/screenshot_server1.png "Grinder Server Screenshot 1")
 
-![Grinder Server Screenshot 2](https://github.com/stephenfewer/grinder/raw/master/screenshot_server1.png "Grinder Server Screenshot 2")
+![Grinder Server Screenshot 2](https://github.com/stephenfewer/grinder/raw/master/screenshot_server2.png "Grinder Server Screenshot 2")
 
 ![Grinder Node Screenshot](https://github.com/stephenfewer/grinder/raw/master/screenshot_node.png "Grinder Node Screenshot")
 

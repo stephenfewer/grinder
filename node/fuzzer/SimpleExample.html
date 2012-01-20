@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+	<head>
+
+    <title>...AND THE MACHINE GRINDS ON!</title>
+	
+	<style>
+		body {
+			font-family: "Courier New";
+			color:yellow;
+			background-color:orange;
+		}
+	</style>
+	
+    <script type="text/javascript">
+			
+		function rand( x )
+		{
+			return Math.floor( Math.random() * x );
+		}
+		
+		function LOGGER( name )
+		{
+			this.name    = name;
+			this.browser = '';
+			
+			idx          = 0;
+			unique_types = [];
+			
+			this.get_browser = function()
+			{
+				if( /Firefox[\/\s](\d+\.\d+)/.test(navigator.userAgent) )
+					return "FF";
+				else if( /MSIE (\d+\.\d+);/.test(navigator.userAgent) )
+					return "IE";
+				else if( /Chrome/.test(navigator.userAgent) )
+					return "CM";
+				else if( /Safari/.test(navigator.userAgent) )
+					return "SF";
+				else if( /Opera/.test(navigator.userAgent) )
+					return "OP";
+				else
+					return "??";
+			};
+			
+			this.browser = this.get_browser();
+			
+			this.starting = function()
+			{
+				parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + this.name + '" browser="' + this.browser + '">' );
+			};
+			
+			this.finished = function()
+			{
+				parseFloat( unescape( '%uF00D%uDEAD') + '</fuzzer>' );
+			};
+			
+			this.unique_id = function( type )
+			{
+				if( typeof unique_types[type] == 'undefined' )
+					unique_types[type] = 0;
+					
+				var result = type + '_' + unique_types[type];
+
+				unique_types[type] += 1;
+				
+				return result;
+			}
+			
+			if( this.browser == 'CM' || this.browser == 'FF' )
+			{
+				this.log = function( message, location, count )
+				{
+					idx += 1;
+
+					log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
+					log_xml += '<idx>' + idx + '</idx>';
+					log_xml += '<location>' + location + '</location>';
+					log_xml += '<message>' + message + '</message>';
+					log_xml += '<count>' + count + '</count>';
+					log_xml += '</log>';
+
+					parseFloat( unescape( '%uC0DE%uDEAD'+log_xml+'%u0000') );
+					
+					return idx - 1;
+				};
+			}
+			else
+			{
+				this.log = function( message, location, count )
+				{
+					idx += 1;
+
+					log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
+					log_xml += '<idx>' + idx + '</idx>';
+					log_xml += '<location>' + location + '</location>';
+					log_xml += '<message>' + message + '</message>';
+					log_xml += '<count>' + count + '</count>';
+					log_xml += '</log>';
+
+					parseFloat( unescape( '%uC0DE%uDEAD') + log_xml );
+					
+					return idx - 1;
+				};
+			}
+			
+			this.type = function( name, obj, obj_hint )
+			{
+				if( typeof obj_hint == 'undefined' )
+				{
+					var id = "?";
+
+					try
+					{
+						if( typeof obj.id != 'undefined' )
+							return obj.id;
+						id = obj.id;
+					} catch(e){}
+					
+					obj_hint = "%" + name + "," + id + "%";
+				}
+
+				return obj_hint;
+			};
+		}
+
+		var logger = null;
+		
+		function grind()
+		{
+			logger = new LOGGER( "SimpleExample" );
+			
+			logger.starting();
+
+			/* BEGIN YOUR FUZZING CODE HERE */
+			
+			var elements = [ 'div', 'input', 'textarea', 'a', 'img', 'form' ];
+			var counts   = [ 1, 4, 8 ];
+			
+			// Create some elements...
+			var elementA  = elements[ rand(elements.length) ];
+			var elementB  = elements[ rand(elements.length) ];
+			
+			logger.log( "id_0 = document.createElement( '" + elementA + "' );", "grind", 1 );
+			var id_0 = document.createElement( elementA );
+			
+			logger.log( "document.body.appendChild( id_0 );", "grind", 1 );
+			document.body.appendChild( id_0 ); 
+			
+			logger.log( "id_1 = document.createElement( '" + elementB + "' );", "grind", 1 );
+			var id_1 = document.createElement( elementB );
+			
+			logger.log( "document.body.appendChild( id_1 );", "grind", 1 );
+			document.body.appendChild( id_1 ); 
+			
+			// Perform up to 128 operations on these elements...
+			for( var i=0 ; i<128 ; i++ )
+			{
+				// Get a 'count' value which is the number of times to repeate any operation we pick below...
+				var count = counts[ rand(counts.length) ];
+				
+				try
+				{
+				
+					// Build an array of property names from this object and pick one. It might be for a function, event handler,
+					// a string value, a number value and so on...
+					var propertyA = [];
+					for( var p in id_0 )
+						propertyA.push( p );
+					var propA = propertyA[ rand(propertyA.length) ];
+							
+					// Pick an operation to perform...
+					switch( rand(4) )
+					{
+						// Set some property to NULL...
+						case 0:
+							logger.log( "id_0['" + propA + "'] = null;", "grind", count );
+							for( var c=0 ; c<count ; c++ )
+								id_0[propA] = null;
+							break;
+						// Perhaps we can call this (we have performed no validation if propA is for a function of not)
+						case 1:
+							logger.log( "id_0['" + propA + "']();", "grind", count );
+							for( var c=0 ; c<count ; c++ )
+								id_0[propA]();
+							break;
+						// Perform a call and pass in object B as a parameter...
+						case 2:
+							logger.log( "id_0['" + propA + "']( id_1 );", "grind", count );
+							for( var c=0 ; c<count ; c++ )
+								id_0[propA]( id_1 );
+							break;
+						// Set some value from one object to the value of another (although we havent verified if the other property even exists)...
+						case 3:
+							logger.log( "id_0['" + propA + "'] = id_1['" + propA + "'];", "grind", count );
+							for( var c=0 ; c<count ; c++ )
+								id_0[propA] = id_1[propA];
+							break;
+						default:
+							break;
+					}
+				}
+				catch( exception )
+				{
+					// Swallow the exception and continue...
+				}
+					
+			}
+			
+			/* END YOUR FUZZING CODE HERE */
+
+			logger.finished();
+			
+			window.location.href = window.location.href;
+		}
+		
+	</script>
+	
+</head>
+
+<body onload='grind();'></body>
+
+</html>

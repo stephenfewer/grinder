@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual C++ Express 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ContinueScript", "ContinueScript.vcproj", "{3844C779-8DA1-48BC-B2E9-CD00A71912EF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3844C779-8DA1-48BC-B2E9-CD00A71912EF}.Debug|Win32.ActiveCfg = Debug|Win32
+		{3844C779-8DA1-48BC-B2E9-CD00A71912EF}.Debug|Win32.Build.0 = Debug|Win32
+		{3844C779-8DA1-48BC-B2E9-CD00A71912EF}.Release|Win32.ActiveCfg = Release|Win32
+		{3844C779-8DA1-48BC-B2E9-CD00A71912EF}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

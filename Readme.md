@@ -8,6 +8,8 @@ Grinder Screenshots
 
 ![Grinder Server Screenshot 1](https://github.com/stephenfewer/grinder/raw/master/screenshot_server1.png "Grinder Server Screenshot 1")
 
+![Grinder Server Screenshot 2](https://github.com/stephenfewer/grinder/raw/master/screenshot_server1.png "Grinder Server Screenshot 2")
+
 ![Grinder Node Screenshot](https://github.com/stephenfewer/grinder/raw/master/screenshot_node.png "Grinder Node Screenshot")
 
 Fuzzers
@@ -47,7 +49,7 @@ Note: Grinder nodes are intended to be installed on Windows systems, but as they
 
 * Edit the config.rb file to suit your setup. Please see the default config.rb file for a description of the various options. You may create multiple config files if you intend on running more than one node on a system, (e.g. config_g1.rb, config_g2.rb). You can then specify on the command line which config file to use when bringing up the node. If you have setup a Grinder server, use the same Grinder Key and the appropriate server URL so the node can communicate with the Grinder server.
 
-* Finally to run the node issue a Ruby command as shown below where the browser parameter is the browser you want to fuzz (e.g. IE or CM).
+* Finally to run the node issue a Ruby command as shown below where the browser parameter is the browser you want to fuzz (e.g. IE, FF or CM).
 
 > .\grinder\node\>ruby grinder.rb <browser> [--config=c:\path\to\alternative\config.rb]
 

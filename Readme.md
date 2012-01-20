@@ -51,7 +51,7 @@ Note: Grinder nodes are intended to be installed on Windows systems, but as they
 
 * Finally to run the node issue a Ruby command as shown below where the browser parameter is the browser you want to fuzz (e.g. IE, FF or CM).
 
-> .\grinder\node\>ruby grinder.rb <browser> [--config=c:\path\to\alternative\config.rb]
+> .\grinder\node\>ruby grinder.rb [--config=c:\path\to\alternative\config.rb BROWSER
 
 Setting Up Encryption For Crash Information
 ===========================================

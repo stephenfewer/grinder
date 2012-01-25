@@ -76,7 +76,7 @@ module Grinder
 						return true
 					end
 				else
-					print_serror( "Failed to resolved jscript9!StrToDbl")
+					print_error( "Failed to resolved jscript9!StrToDbl")
 				end
 				return false
 			end

@@ -37,13 +37,15 @@ Installing a Grinder Node
 
 Note: Grinder nodes are intended to be installed on Windows systems, but as they are written primarily in Ruby it should be possible to get Linux/Mac support with some modifications.
 
+For a detailed step by step guide to install a Grinder Node please refer to the followin wiki page:
+
+https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node
+
+For a quick start, the steps to installing a node are as follows:
+
 * Install the latest stable version of Ruby (www.ruby-lang.org).
 
 * Copy '.\grinder\node\data\grinder_logger.dll' to 'c:\windows\system32\' (Or 'c:\windows\syswow64\' on an x64 system)
-
-* Copy '.\grinder\node\data\dbghelp.dll' to 'c:\windows\system32\' (Or 'c:\windows\syswow64\' on an x64 system)
-
-* Copy '.\grinder\node\data\symsrv.dll' to 'c:\windows\system32\' (Or 'c:\windows\syswow64\' on an x64 system)
 
 * Create a folder for symbol files to be stored, e.g. 'c:\symbols\'
 

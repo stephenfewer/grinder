@@ -44,18 +44,18 @@ module Grinder
 			  ULONG   NameLen;
 			  ULONG   MaxNameLen;
 			  CHAR    Name[1];
-			} SYMBOL_INFO, *LPSYMBOL_INFO;', 'dbghelp' )
+			} SYMBOL_INFO, *LPSYMBOL_INFO;', '.\\data\\dbghelp.dll' )
 
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD WINAPI SymGetOptions( VOID );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymCleanup( __in HANDLE hProcess );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD WINAPI SymSetOptions( DWORD SymOptions );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymInitialize( HANDLE hProcess, LPCSTR UserSearchPath, BOOL fInvadeProcess );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromName( HANDLE hProcess, LPCSTR Name, __inout LPSYMBOL_INFO Symbol );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD64 WINAPI SymLoadModuleEx( HANDLE hProcess, HANDLE hFile, LPCSTR ImageName, LPCSTR ModuleName, DWORD64 BaseOfDll, DWORD DllSize, LPVOID Data, DWORD Flags );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromAddr( __in HANDLE hProcess, __in DWORD64 Address, __out_opt DWORD64 * Displacement, __inout LPSYMBOL_INFO Symbol );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromIndex( __in HANDLE hProcess, __in DWORD64 BaseOfDll, __in DWORD Index, __inout LPSYMBOL_INFO Symbol );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymRefreshModuleList( __in HANDLE hProcess );', 'dbghelp' )
-			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymSetSearchPath( __in HANDLE hProcess, __in_opt LPCSTR SearchPath );', 'dbghelp' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD WINAPI SymGetOptions( VOID );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymCleanup( __in HANDLE hProcess );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD WINAPI SymSetOptions( DWORD SymOptions );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymInitialize( HANDLE hProcess, LPCSTR UserSearchPath, BOOL fInvadeProcess );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromName( HANDLE hProcess, LPCSTR Name, __inout LPSYMBOL_INFO Symbol );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI DWORD64 WINAPI SymLoadModuleEx( HANDLE hProcess, HANDLE hFile, LPCSTR ImageName, LPCSTR ModuleName, DWORD64 BaseOfDll, DWORD DllSize, LPVOID Data, DWORD Flags );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromAddr( __in HANDLE hProcess, __in DWORD64 Address, __out_opt DWORD64 * Displacement, __inout LPSYMBOL_INFO Symbol );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymFromIndex( __in HANDLE hProcess, __in DWORD64 BaseOfDll, __in DWORD Index, __inout LPSYMBOL_INFO Symbol );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymRefreshModuleList( __in HANDLE hProcess );', '.\\data\\dbghelp.dll' )
+			Metasm::WinAPI.new_api_c( 'WINUSERAPI BOOL WINAPI SymSetSearchPath( __in HANDLE hProcess, __in_opt LPCSTR SearchPath );', '.\\data\\dbghelp.dll' )
 
 			class ProcessSymbols
 				
@@ -64,8 +64,12 @@ module Grinder
 				include Metasm
 				
 				def self.init( extra_symbol_server=nil )
+			
+					Metasm::WinAPI.loadlibrarya( ".\\data\\dbghelp.dll" )
+					Metasm::WinAPI.loadlibrarya( ".\\data\\symsrv.dll" )
+				
 					symopts = Metasm::WinAPI.symgetoptions();
-					symopts |= SYMOPT_NO_PROMPTS | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS 
+					symopts |= SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS 
 					Metasm::WinAPI.symsetoptions( symopts );
 					
 					@@symPath = "SRV*#{$symbols_dir}*http://msdl.microsoft.com/download/symbols"

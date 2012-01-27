@@ -33,11 +33,11 @@ $swap_fuzzer_count = 100000
 # Set to nil to disable this feature.
 $debugger_restart_minutes = 60
 
-# Config the logger dll...
-$logger_dll  = 'grinder_logger.dll'
 # The directory to write the log files (must be writeable from a Low integrity process).
 # Note: %USERNAME% will be resolved at run time to the current user running the node.
 $logger_dir  = 'C:\\Users\\%USERNAME%\\AppData\\Local\\Temp\\Low\\'
+# On older systems (2003/XP) you will need to use this directory...
+#$logger_dir  = 'C:\\Documents and Settings\\%USERNAME%\\Local Settings\\Temp\\'
 
 # Configure the internet explorer browser...
 $internetexplorer_exe = 'C:\\Program Files\\Internet Explorer\\iexplore.exe'
@@ -79,3 +79,6 @@ $webstats_password = nil
 $webstats_https    = false
 # Post fuzz status to grinder web server every N minutes.
 $webstats_update_minutes = 5
+
+# The logger dll (This need not be changed).
+$logger_dll  = 'grinder_logger.dll'

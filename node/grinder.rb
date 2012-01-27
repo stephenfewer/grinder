@@ -60,10 +60,8 @@ class Grinder
 			sysdir = 'syswow64'
 		end
 		
-		verify = [ 	"#{root}\\#{sysdir}\\grinder_logger.dll",
-					"#{root}\\#{sysdir}\\dbghelp.dll",
-					"#{root}\\#{sysdir}\\symsrv.dll" ]
-					
+		verify = [ "#{root}\\#{sysdir}\\grinder_logger.dll" ]
+		
 		verify.each do | file |
 			if( not ::File.exist?( file ) )
 				print_error( "Failed to verify '#{file}' exists." )

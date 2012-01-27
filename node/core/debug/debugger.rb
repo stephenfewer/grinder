@@ -18,11 +18,11 @@ module Grinder
 		
 			class Debugger < Metasm::WinDbgAPI
 
-				def initialize( crashes_dir, target, target_url, logger, logdir=nil  )
+				def initialize( crashes_dir, target, target_url, logdir=nil  )
 					super( target + ( extra_param ? ' ' + extra_param : '' ) + ' ' + target_url, true )
 					@browser     = ''
 					@crashes_dir = crashes_dir
-					@logger      = logger
+					@logger      = 'grinder_logger.dll'
 					@logdir      = logdir ? logdir : ENV['TEMP']
 					@attached    = ::Hash.new
 					Grinder::Core::Debug::ProcessSymbols.init( extra_symbol_server() )
@@ -424,7 +424,7 @@ module Grinder
 					
 					target_url  = 'http://' + $server_address + ':' + $server_port.to_s + '/grinder'
 					
-					debugger = klass.new( $crashes_dir, target_exe, target_url, $logger_dll, $logger_dir )
+					debugger = klass.new( $crashes_dir, target_exe, target_url, $logger_dir )
 
 					status = debugger.monitor
 

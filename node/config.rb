@@ -79,6 +79,3 @@ $webstats_password = nil
 $webstats_https    = false
 # Post fuzz status to grinder web server every N minutes.
 $webstats_update_minutes = 5
-
-# The logger dll (This need not be changed).
-$logger_dll  = 'grinder_logger.dll'

@@ -49,6 +49,12 @@ class Grinder
 	end
 	
 	def systest
+	
+		# this is kinda hacky but it should prevent people from trying to run the node incorectly.
+		if( not ::File.exist?( ".\\grinder.rb" ) )
+			print_error( "Error, you are not running this node from the \\grinder\\node\\ directory. You need to change the working directory (cd path\\to\\grinder\\node\\) and try again." )
+			return false
+		end
 		
 		root = 'c:\windows'
 		if( ENV.include?( 'SystemRoot' ) )
@@ -60,28 +66,39 @@ class Grinder
 			sysdir = 'syswow64'
 		end
 		
-		verify = [ "#{root}\\#{sysdir}\\grinder_logger.dll" ]
+		grinder_logger = "#{root}\\#{sysdir}\\grinder_logger.dll"
 		
-		verify.each do | file |
-			if( not ::File.exist?( file ) )
-				print_error( "Failed to verify '#{file}' exists." )
-				return false
-			end
+		if( not ::File.exist?( grinder_logger ) )
+			print_error( "Error, the grinder logger DLL '#{grinder_logger}' does not exist." )
+			return false
+		end
+			
+		if( not ::Dir.exist?( $logger_dir ) )
+			print_error( "Error, the temporary logging directory ('#{$logger_dir }') does not exist." )
+			return false
 		end
 		
-		if( not ::Dir.exist?( $crashes_dir  ) )
+		if( not ::Dir.exist?( $crashes_dir ) )
 			print_error( "Error, the Crashes directory ('#{$crashes_dir }') does not exist." )
 			return false
 		end
 		
-		if( not ::Dir.exist?( $fuzzers_dir  ) )
+		if( not ::Dir.exist?( $fuzzers_dir ) )
 			print_error( "Error, the Fuzzers directory ('#{$fuzzers_dir }') does not exist." )
 			return false
 		end
 		
-		if( not ::Dir.exist?( $symbols_dir  ) )
+		if( not ::Dir.exist?( $symbols_dir ) )
 			print_error( "Error, the Symbols directory ('#{$symbols_dir }') does not exist." )
 			return false
+		end
+		
+		if( $debugger_restart_minutes < 5 )
+			print_warning( "Warning, you have set the debugger to restart every #{$debugger_restart_minutes} minutes, The Grinder Server will see this node as inactive unless you use a value of more than 5 minutes." )
+		end
+		
+		if( $webstats_baseurl and not $webstats_baseurl.end_with?( 'status.php' ) )
+			print_warning( "Warning, the URL to your Grinder Server (#{@webstats_baseurl}) does not point to status.php. Please ensure this URL exists on your Grinder Server." )
 		end
 		
 		if( $crashes_encrypt )

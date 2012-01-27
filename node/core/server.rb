@@ -106,8 +106,10 @@ module Grinder
 						response['Content-Type'] = 'text/html'
 						response.body            = @@fuzzers[ @@index ][ 1 ]
 					else
-						response.status          = 404
+						# all requests that would generate a 404 response are instead handled with a 301 redirect back to /grinder
+						response.status          = 301
 						response['Content-Type'] = 'text/html'
+						response['Location']     = '/grinder'
 						response.body            = ''
 					end
 				end
@@ -164,13 +166,9 @@ module Grinder
 							:AccessLog    => [],
 							:Logger       => NoLog.new
 						)
-					@server.mount( "/current_fuzzer", GrinderServlet )
-					@server.mount( "/grinder", GrinderServlet )
-					@server.mount( "/grind.jpg", GrinderServlet )
-					@server.mount( "/grind.pdf", GrinderServlet )
-					@server.mount( "/grind.svg", GrinderServlet )
-					@server.mount( "/grind.js", GrinderServlet )
-					@server.mount( "/grind.html", GrinderServlet )
+					
+					@server.mount( '/', GrinderServlet )
+
 					@server.start
 				end
 			end

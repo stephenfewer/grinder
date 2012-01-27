@@ -8,4 +8,5 @@ node/source/logger/Debug/
 node/source/logger/logger.vcproj.*.user
 node/source/logger/*.ncb
 node/source/logger/*.suo
+node/data/symsrv.yes
 desktop.ini

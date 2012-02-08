@@ -14,7 +14,12 @@ module Grinder
 	module Core
 	
 		class WebStats
-		
+			
+			VERIFIED_UNKNOWN       = 0
+			VERIFIED_INTERESTING   = 1
+			VERIFIED_UNINTERESTING = 2
+			VERIFIED_EXPLOITABLE   = 3
+			
 			def initialize( node, baseurl, key, username=nil, password=nil, https=false )
 			    @node     = node
 			    @baseurl  = baseurl
@@ -27,17 +32,18 @@ module Grinder
 			def update_node_fuzz_status( testcases_per_minute )
 				
 				params = {
-					'key'    => @key,
-					'action' => 'update_node_fuzz_status',
-					'time'   => ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ),
-					'node'   => @node,
-					'tcpm'   => testcases_per_minute
+					'key'     => @key,
+					'action'  => 'update_node_fuzz_status',
+					'version' => "#{$version_major}.#{$version_minor}",
+					'time'    => ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ),
+					'node'    => @node,
+					'tcpm'    => testcases_per_minute
 				}
 
 				return _send_request( params )
 			end
 			
-			def add_crash( time, browser, hash, type, fuzzer, crash_data, log_data )
+			def add_crash( time, browser, hash, type, fuzzer, crash_data, log_data, verified=VERIFIED_UNKNOWN )
 			
 				params = {
 					'key'        => @key,
@@ -50,7 +56,8 @@ module Grinder
 					'type'       => type,
 					'fuzzer'     => fuzzer,
 					'crash_data' => ::Base64.encode64( crash_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
-					'log_data'   => ::Base64.encode64( log_data ).tr( '+/=', '-_,' ).gsub( "\n", '' )
+					'log_data'   => ::Base64.encode64( log_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
+					'verified'   => verified
 				}
 
 				return _send_request( params )
@@ -122,7 +129,7 @@ if( $0 == __FILE__ )
 	
 	web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
 
-	success = web.add_crash( ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ), $grinder_node, ['ABABABAB','12121212'], 'Testing', 'TestFuzzer', crash_data, log_data )
+	success = web.add_crash( ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ), $grinder_node, ['ABABABAB','12121212'], 'Testing', 'TestFuzzer', crash_data, log_data, 1 )
 	
 	$stdout.puts success
 	

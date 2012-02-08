@@ -15,8 +15,8 @@
 	if( !user_isloggedin() )
 		exit;
 		
-	$fields = array( 'Node', 'Target', 'Fuzzer', 'Type', 'Hash', 'Quick Hash', 'Full Hash' );
-	$fields_sql = array( 'node', 'target', 'fuzzer', 'type', 'hash', 'hash_quick', 'hash_full' );
+	$fields = array( 'Node', 'Target', 'Fuzzer', 'Type', 'Hash', 'Quick Hash', 'Full Hash', 'Unique', 'Verified' );
+	$fields_sql = array( 'node', 'target', 'fuzzer', 'type', 'hash', 'hash_quick', 'hash_full', 'unique', 'verified' );
 
 	function create_filter( $field, $value )
 	{
@@ -288,6 +288,24 @@
 				});
 			});
 			
+			$( "#unique_alert_create_button" ).button().click( function() {
+				$.post( 'crashes.php', { action:'create_alert', field:'7', value:'1' }, function( data ) {
+					if( data != 'success' )
+						return error_alert( 'Failed to create the alert.', 'Error!' );
+					error_alert( 'The new alert has been created.', 'Success!' );
+					refreshTab( 1 );
+				});
+			});
+			
+			$( "#verified_alert_create_button" ).button().click( function() {
+				$.post( 'crashes.php', { action:'create_alert', field:'8', value:'1' }, function( data ) {
+					if( data != 'success' )
+						return error_alert( 'Failed to create the alert.', 'Error!' );
+					error_alert( 'The new alert has been created.', 'Success!' );
+					refreshTab( 1 );
+				});
+			});
+			
 			enableAutoRefresh();
 			
 		</script>
@@ -531,7 +549,7 @@
 				<h3><a href="#">Filters</a></h3>
 				<div>
 					<h3>New Filter</h3>
-					<p>Exclude all crashes where the <select id='filter_field_option'><option filter_field='0'>Node</option><option filter_field='1'>Target</option><option filter_field='2'>Fuzzer</option><option filter_field='3'>Type</option><option filter_field='4'>Hash</option><option filter_field='5'>Quick Hash</option><option filter_field='6'>Full Hash</option></select> is equal to <input id='filter_value_input' value=''/><br/><br/><button id='filter_create_button'>Create</button><p>
+					<p>Exclude all crashes where the <select id='filter_field_option'><option filter_field='0'>Node</option><option filter_field='1'>Target</option><option filter_field='2'>Fuzzer</option><option filter_field='3'>Type</option><option filter_field='4'>Hash</option><option filter_field='5'>Quick Hash</option><option filter_field='6'>Full Hash</option></select> is equal to <input id='filter_value_input' value=''/><br/><br/><button id='filter_create_button'>Create</button></p>
 					
 					<h3>All Filters</h3>
 					<ul>
@@ -555,8 +573,11 @@
 				<h3><a href="#">Alerts</a></h3>
 				<div>
 					<h3>New Alert</h3>
-					<p>Send an e-mail alert upon a new crash where the <select id='alert_field_option'><option alert_field='0'>Node</option><option alert_field='1'>Target</option><option alert_field='2'>Fuzzer</option><option alert_field='3'>Type</option><option alert_field='4'>Hash</option><option alert_field='5'>Quick Hash</option><option alert_field='6'>Full Hash</option></select> is equal to <input id='alert_value_input' value=''/><br/><br/><button id='alert_create_button'>Create</button><p>
-					
+					<ul>
+						<li><span class='message-text'>Send an e-mail alert upon a new crash where the <select id='alert_field_option'><option alert_field='0'>Node</option><option alert_field='1'>Target</option><option alert_field='2'>Fuzzer</option><option alert_field='3'>Type</option><option alert_field='4'>Hash</option><option alert_field='5'>Quick Hash</option><option alert_field='6'>Full Hash</option></select> is equal to <input id='alert_value_input' value=''/></span><br/><button id='alert_create_button'>Create</button><br/></li>
+						<li><span class='message-text'>Send an e-mail alert upon a new unique crash being generated.</span><br/><button id='unique_alert_create_button'>Create</button><br/></li>
+						<li><span class='message-text'>Send an e-mail alert upon a new crash being pre verified as interesting or exploitable.</span><br/><button id='verified_alert_create_button'>Create</button><br/></li>
+					</ul>
 					<h3>All Alerts</h3>
 					<ul>
 					<?php	
@@ -569,7 +590,19 @@
 							{
 								$field = $row['field'];
 						
-								echo "<li><span class='message-text'>Send an e-mail alert upon a new crash where the " . htmlentities( $fields[ $field ], ENT_QUOTES ) . " is equal to '" . htmlentities( $row['value'], ENT_QUOTES ) . "'.</span> <button class='delete_alert_button' style='width:30px;height:30px;' title='Delete this alert...' onclick='javascript:_delete_alert_click(" . htmlentities( $row['alert_id'], ENT_QUOTES ) . ");'>&nbsp;</button></li><br/>";
+								if( $fields[ $field ] == 'Unique' )
+								{
+									echo "<li><span class='message-text'>Send an e-mail alert upon a new crash which is unique.</span> <button class='delete_alert_button' style='width:30px;height:30px;' title='Delete this alert...' onclick='javascript:_delete_alert_click(" . htmlentities( $row['alert_id'], ENT_QUOTES ) . ");'>&nbsp;</button></li><br/>";
+								}
+								else if( $fields[ $field ] == 'Verified' )
+								{
+									echo "<li><span class='message-text'>Send an e-mail alert upon a new crash being pre verified as interesting or exploitable.</span> <button class='delete_alert_button' style='width:30px;height:30px;' title='Delete this alert...' onclick='javascript:_delete_alert_click(" . htmlentities( $row['alert_id'], ENT_QUOTES ) . ");'>&nbsp;</button></li><br/>";
+								}
+								else
+								{
+									echo "<li><span class='message-text'>Send an e-mail alert upon a new crash where the " . htmlentities( $fields[ $field ], ENT_QUOTES ) . " is equal to '" . htmlentities( $row['value'], ENT_QUOTES ) . "'.</span> <button class='delete_alert_button' style='width:30px;height:30px;' title='Delete this alert...' onclick='javascript:_delete_alert_click(" . htmlentities( $row['alert_id'], ENT_QUOTES ) . ");'>&nbsp;</button></li><br/>";
+								}
+								
 							}
 							mysql_free_result( $result );
 						}

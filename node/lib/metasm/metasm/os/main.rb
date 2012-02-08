@@ -14,7 +14,7 @@ class OS
 	class Process
 		attr_accessor :pid, :modules
 		class Module
-			attr_accessor :path, :addr
+			attr_accessor :path, :addr, :size
 		end
 
 		def initialize(pid=nil)

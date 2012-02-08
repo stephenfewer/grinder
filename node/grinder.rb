@@ -14,7 +14,7 @@ class Grinder
 	BROWSER_CLASS_IE = '.\browser\internetexplorer.rb'
 	BROWSER_CLASS_CM = '.\browser\chrome.rb'
 	BROWSER_CLASS_FF = '.\browser\firefox.rb'
-	#BROWSER_CLASS_SF = '.\browser\safari.rb'
+	BROWSER_CLASS_SF = '.\browser\safari.rb'
 	#BROWSER_CLASS_OP = '.\browser\opera.rb'
 
 	def initialize( arguments )
@@ -36,9 +36,9 @@ class Grinder
 				elsif( arg == 'FF' or arg == 'FIREFOX' )
 					@browser_type  = 'FF'
 					@browser_class = BROWSER_CLASS_FF
-				#elsif( arg == 'SF' or arg == 'SAFARI' )
-				#	@browser_type  = 'SF'
-				#	@browser_class = BROWSER_CLASS_SF
+				elsif( arg == 'SF' or arg == 'SAFARI' )
+					@browser_type  = 'SF'
+					@browser_class = BROWSER_CLASS_SF
 				#elsif( arg == 'OP' or arg == 'OPERA' )
 				#	@browser_type  = 'OP'
 				#	@browser_class = BROWSER_CLASS_OP
@@ -50,13 +50,20 @@ class Grinder
 	
 	def systest
 	
+		ruby_major = RUBY_VERSION.split( '.' )[0].to_i
+		ruby_minor = RUBY_VERSION.split( '.' )[1].to_i
+
+		if( ruby_major < 1 and ruby_minor < 9 )
+			print_warning( "Warning, you should be running this on at least Ruby 1.9" )
+		end
+		
 		# this is kinda hacky but it should prevent people from trying to run the node incorectly.
 		if( not ::File.exist?( ".\\grinder.rb" ) )
 			print_error( "Error, you are not running this node from the \\grinder\\node\\ directory. You need to change the working directory (cd path\\to\\grinder\\node\\) and try again." )
 			return false
 		end
 		
-		root = 'c:\windows'
+		root = "c:\\windows"
 		if( ENV.include?( 'SystemRoot' ) )
 			root = ENV[ 'SystemRoot' ]
 		end
@@ -69,8 +76,17 @@ class Grinder
 		grinder_logger = "#{root}\\#{sysdir}\\grinder_logger.dll"
 		
 		if( not ::File.exist?( grinder_logger ) )
-			print_error( "Error, the grinder logger DLL '#{grinder_logger}' does not exist." )
-			return false
+			begin
+				::File.open( '.\\data\\grinder_logger.dll', 'rb' ) do | dll_src |
+					::File.open( grinder_logger, 'wb' ) do | dll_dst |
+						dll_dst.write( dll_src.read( dll_src.stat.size ) )
+						print_status( "Created the grinder logger DLL '#{grinder_logger}'." )
+					end
+				end
+			rescue
+				print_error( "Error, the grinder logger DLL '#{grinder_logger}' does not exist. Please manually copy this file from the \\grinder\\node\\data\\ directory." )
+				return false
+			end
 		end
 			
 		if( not ::Dir.exist?( $logger_dir ) )
@@ -120,7 +136,7 @@ class Grinder
 				return false
 			end
 		end
-
+		
 		return true
 	end
 
@@ -157,7 +173,7 @@ class Grinder
 			kill_thread  = nil
 			
 			if( not $server_pid )
-				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} #{@browser_type}" )
+				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type}" )
 				sleep( 2 )
 				print_status( "Started the Grinder server process #{$server_pid}" )
 				server_reset = 12

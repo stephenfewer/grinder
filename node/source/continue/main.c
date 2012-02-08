@@ -32,6 +32,7 @@ BOOL CALLBACK enumproc( HWND hWnd, LPARAM lParam )
 			SendMessage( hWnd, BM_CLICK, 0 , 0 );
 			return FALSE;
 		}
+
 	} while(0);
 
 	return TRUE;
@@ -86,6 +87,20 @@ void main( void )
 		if( hWindow )
 		{
 			// cant find the 'Continue' button
+		}
+
+		hWindow = FindWindow( NULL, "WebKit2WebProcess.exe" );
+		if( hWindow )
+			EnumChildWindows( hWindow, enumproc, 0 );
+		
+		hWindow = FindWindow( NULL, "Internet Explorer" );
+		if( hWindow )
+			EnumChildWindows( hWindow, enumproc, 0 );
+
+		hWindow = FindWindow( NULL, "Are you sure?" );
+		if( hWindow )
+		{
+			// cant find the 'Leave Page' button.
 		}
 
 		Sleep( 250 );

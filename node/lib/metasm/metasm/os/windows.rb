@@ -781,6 +781,12 @@ EOS
 	new_api_c <<EOS, 'psapi'
 #line #{__LINE__}
 
+typedef struct _MODULEINFO {
+  LPVOID lpBaseOfDll;
+  DWORD  SizeOfImage;
+  LPVOID EntryPoint;
+} MODULEINFO, *LPMODULEINFO;
+
 BOOL
 WINAPI
 EnumProcesses(
@@ -803,6 +809,16 @@ GetModuleFileNameExA(
 	HMODULE hModule,
 	LPSTR lpFilename,
 	DWORD nSize);
+	
+BOOL
+WINAPI
+GetModuleInformation(
+  __in   HANDLE hProcess,
+  __in   HMODULE hModule,
+  __out  LPMODULEINFO lpmodinfo,
+  __in   DWORD cb
+);
+
 EOS
  
 	# convert a native function return value
@@ -872,6 +888,10 @@ class WinOS < OS
 					m.addr = mod
 					if len = WinAPI.getmodulefilenameexa(handle, mod, path, path.length)
 						m.path = path[0, len]
+					end
+					minfo = WinAPI.alloc_c_struct( "MODULEINFO" )
+					if( WinAPI.getmoduleinformation( handle, mod, minfo, minfo.length ) != 0 )
+						m.size = minfo[:sizeofimage]
 					end
 					ret << m
 				}

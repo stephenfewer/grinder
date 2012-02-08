@@ -98,7 +98,7 @@ module Grinder
 							end
 						end
 
-						raise if not crash_file
+						raise 'Unable to create a unique crash file name' if not crash_file
 
 						text  = ''
 						text << "\n"
@@ -118,8 +118,9 @@ module Grinder
 						::File.open( crash_file, 'w' ) do | dest |
 							dest.write( text )
 						end
-								
-					rescue
+						
+					rescue ::Exception => e
+						print_error( "Error, unable to save the crash file (#{e.message})" )
 						text = nil
 					end
 					
@@ -131,10 +132,30 @@ module Grinder
 					text    = nil
 					
 					begin	
-						sleep( 5 )
+
+						got_access = false
+
+						if( ::File.exists?( src_file ) )
+							0.upto( 60 ) do
+								begin
+									src = ::File.open( src_file, 'r' )
+									if( src )
+										src.close
+										got_access = true
+										break
+									end
+								rescue
+									sleep( 0.5 )
+								end
+							end
+						else
+							raise 'File doesnt exist'
+						end
+						
+						raise 'Cant access the temporary log file' if not got_access
 						
 						::File.open( src_file, 'r' ) do | src |
-							
+						
 							log_dir = "#{ @dst_dir }#{ @dst_dir.end_with?('\\') ? '' : '\\' }#{@browser}\\"
 							
 							if( not ::Dir.exists?( log_dir ) )
@@ -150,8 +171,8 @@ module Grinder
 									break
 								end
 							end
-
-							raise if not log_file
+							
+							raise 'Unable to create a unique log file name' if not log_file
 							
 							text = src.read( src.stat.size )
 							
@@ -164,18 +185,32 @@ module Grinder
 							::File.open( log_file, 'w' ) do | dest |
 								dest.write( text )
 							end
-					
+							
 							success = true
 						end
+
+						raise 'Unknown Error' if not success
 						
 						# if successfull, delete the origional src_file
-						if( success )
-							::File.delete( src_file )
-						else
-							text = nil
+						
+						deleted = false
+						
+						0.upto( 60 ) do
+							begin
+								::File.delete( src_file )
+								deleted = true
+								break
+							rescue ::Errno::EACCES
+								sleep( 0.5 )
+							end
 						end
 						
-					rescue
+						if( not deleted )
+							print_warning( "Warning, unable to delete the temporary logging file '#{src_file}'. Please manually delete it." )
+						end
+		
+					rescue ::Exception => e
+						print_error( "Error, unable to save the log file '#{src_file}' (#{e.message})" )
 						text = nil
 					end
 					

@@ -68,36 +68,24 @@ if( $0 == __FILE__ )
 	skip_elem_id = []
 	
 	ARGV.each_index do | index |
-		case ARGV[index]
-			when '+tickle'
-				print_tickle = true
-			when '-tickle'
-				print_tickle = false
-			when '+try'
-				try_catch = true
-			when '-try'
-				try_catch = false
-			when '+comments'
-				print_comments = true	
-			when '-comments'
-				print_comments = false	
-			when '-id_0'
-				skip_elem_id << 'id_0'
-			when '-id_1'
-				skip_elem_id << 'id_1'
-			when '-id_2'
-				skip_elem_id << 'id_2'
-			when '-id_3'
-				skip_elem_id << 'id_3'
-			when '-id_4'
-				skip_elem_id << 'id_4'
-			when '-id_5'
-				skip_elem_id << 'id_5'
-			when '-id_6'
-				skip_elem_id << 'id_6'
-			when '-id_7'
-				skip_elem_id << 'id_7'
+		if( ARGV[index].start_with?( '-id_' ) )
+			skip_elem_id << ARGV[index].gsub( '-id_', 'id_' )
+		else
+			case ARGV[index]
+				when '+tickle'
+					print_tickle = true
+				when '-tickle'
+					print_tickle = false
+				when '+try'
+					try_catch = true
+				when '-try'
+					try_catch = false
+				when '+comments'
+					print_comments = true	
+				when '-comments'
+					print_comments = false	
 			end
+		end
 	end
 	
 	log_file = ARGV[ ARGV.length - 1 ]

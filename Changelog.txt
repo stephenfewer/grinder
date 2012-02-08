@@ -1,0 +1,28 @@
+Version 0.2 - 08 Feb 2012
+=========================
+
+Wiki
+----
+	* Added a step by step guide for installing a Grinder Node (https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node).
+
+Server
+------
+	* Users can create e-mail alerts for when new unique crashes are generated or when new crashes have been pre verified as interesting/exploitable (upcoming feature).
+
+Node
+----
+	* Added initial Safari support (grinder\node\browser\safari.rb).
+	* When generating crash information, include the modules version and description in the processes module list.
+	* Added 301 redirect support to grinder\node\core\server.rb to catch edge cases where a fuzzer ends up trying a bogus request. Now gets redirected back to the fuzzer.
+	* Allow browser specific fuzzers via sub directories (IE/CM/FF/OP/SF) in the \grinder\node\fuzzers\ folder.
+	* Refactored the javascript portion of the logging out to grinder\node\data\logging.js so it can be updated without effecting existing fuzzers. Updated grinder\node\core\server.rb and grinder\node\fuzzers\SimpleExample.html to use this.
+	* Check for grinder_logger.dll in system32/syswow64 and copy if not there, then fail the system test if the copy fails.
+	* Bugfix for saving a log file when a concurrancy issue prevents the temporary log file from being accessed or deleated.
+	* Removed the $webstats_update_minutes option from config.rb as it can lead to an inconsistency with the Grinder Server.
+
+
+
+Version 0.1 - 20 Jan 2012
+=========================
+
+	* Initial Release.

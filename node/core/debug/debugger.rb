@@ -146,7 +146,7 @@ module Grinder
 					debugstring = @mem[pid][info.ptr, info.length]
 					debugstring = debugstring.unpack('S*').pack('C*') if info.unicode != 0
 					debugstring = debugstring[0, debugstring.index(?\0)] if debugstring.index(?\0)
-					print_status( "Debug message from #{pid}: #{debugstring}" )
+					print_status( "Debug message from process #{pid}: #{debugstring}" )
 					Metasm::WinAPI::DBG_CONTINUE
 				end
 				
@@ -295,21 +295,22 @@ module Grinder
 					# Force all moduels in the process to get their symbols for all upcoming lookups...
 					@attached[pid].refresh_symbols
 					
-					log_data  = "Registers:\n"
-					log_data << "    EAX = 0x#{'%08X'%ctx[:eax]} - #{ mem_prot( pid, ctx[:eax] ) } - #{ @attached[pid].address2symbol( ctx[:eax] ) }\n"
-					log_data << "    EBX = 0x#{'%08X'%ctx[:ebx]} - #{ mem_prot( pid, ctx[:ebx] ) } - #{ @attached[pid].address2symbol( ctx[:ebx] ) }\n"
-					log_data << "    ECX = 0x#{'%08X'%ctx[:ecx]} - #{ mem_prot( pid, ctx[:ecx] ) } - #{ @attached[pid].address2symbol( ctx[:ecx] ) }\n"
-					log_data << "    EDX = 0x#{'%08X'%ctx[:edx]} - #{ mem_prot( pid, ctx[:edx] ) } - #{ @attached[pid].address2symbol( ctx[:edx] ) }\n"
-					log_data << "    ESI = 0x#{'%08X'%ctx[:esi]} - #{ mem_prot( pid, ctx[:esi] ) } - #{ @attached[pid].address2symbol( ctx[:esi] ) }\n"
-					log_data << "    EDI = 0x#{'%08X'%ctx[:edi]} - #{ mem_prot( pid, ctx[:edi] ) } - #{ @attached[pid].address2symbol( ctx[:edi] ) }\n"
-					log_data << "    EBP = 0x#{'%08X'%ctx[:ebp]} - #{ mem_prot( pid, ctx[:ebp] ) } - #{ @attached[pid].address2symbol( ctx[:ebp] ) }\n"
-					log_data << "    ESP = 0x#{'%08X'%ctx[:esp]} - #{ mem_prot( pid, ctx[:esp] ) } - #{ @attached[pid].address2symbol( ctx[:esp] ) }\n"
-					log_data << "    EIP = 0x#{'%08X'%ctx[:eip]} - #{ mem_prot( pid, ctx[:eip] ) } - #{ @attached[pid].address2symbol( ctx[:eip] ) }\n"
-
 					proc = Metasm::WinOS::Process.new( pid )
+					
 					mods = proc.modules.sort_by do | mod |
 						mod.addr
 					end
+					
+					log_data  = "Registers:\n"
+					log_data << "    EAX = 0x#{'%08X'%ctx[:eax]} - #{ mem_prot( pid, ctx[:eax] ) } - #{ @attached[pid].address2symbol( ctx[:eax], mods ) }\n"
+					log_data << "    EBX = 0x#{'%08X'%ctx[:ebx]} - #{ mem_prot( pid, ctx[:ebx] ) } - #{ @attached[pid].address2symbol( ctx[:ebx], mods ) }\n"
+					log_data << "    ECX = 0x#{'%08X'%ctx[:ecx]} - #{ mem_prot( pid, ctx[:ecx] ) } - #{ @attached[pid].address2symbol( ctx[:ecx], mods ) }\n"
+					log_data << "    EDX = 0x#{'%08X'%ctx[:edx]} - #{ mem_prot( pid, ctx[:edx] ) } - #{ @attached[pid].address2symbol( ctx[:edx], mods ) }\n"
+					log_data << "    ESI = 0x#{'%08X'%ctx[:esi]} - #{ mem_prot( pid, ctx[:esi] ) } - #{ @attached[pid].address2symbol( ctx[:esi], mods ) }\n"
+					log_data << "    EDI = 0x#{'%08X'%ctx[:edi]} - #{ mem_prot( pid, ctx[:edi] ) } - #{ @attached[pid].address2symbol( ctx[:edi], mods ) }\n"
+					log_data << "    EBP = 0x#{'%08X'%ctx[:ebp]} - #{ mem_prot( pid, ctx[:ebp] ) } - #{ @attached[pid].address2symbol( ctx[:ebp], mods ) }\n"
+					log_data << "    ESP = 0x#{'%08X'%ctx[:esp]} - #{ mem_prot( pid, ctx[:esp] ) } - #{ @attached[pid].address2symbol( ctx[:esp], mods ) }\n"
+					log_data << "    EIP = 0x#{'%08X'%ctx[:eip]} - #{ mem_prot( pid, ctx[:eip] ) } - #{ @attached[pid].address2symbol( ctx[:eip], mods ) }\n"
 
 					offset = ctx[:eip]
 					prog = Metasm::ExeFormat.new( Metasm::Ia32.new )
@@ -341,7 +342,17 @@ module Grinder
 							child_ebp = data[0,4].unpack('V').first
 							ret_addr  = data[4,4].unpack('V').first
 							break if( child_ebp == 0 or ret_addr == 0 )
-							ret_symbol = @attached[pid].address2symbol( ret_addr )
+							ret_symbol = @attached[pid].address2symbol( ret_addr, mods )
+							if( ret_symbol.empty? )
+								# If we failed to lookup a symbol name, we can generate a pseudo symbol name via the module and the offset.
+								# This avoids generating different crashes which if we had symbols, would all heve different crash hashes, but
+								# due to a lack of symbols the different crashes end up being grouped together. This way we can better
+								# differentiate them. However the main caveat of going this route is if a module changes due to an update,
+								# the same crash may now generate a different crash hash (real symbols would avoid this). I still think
+								# this is better then having a ton of different crashes with the same hash though. And IE, FF and CM have symbols.
+								ret_symbol = @attached[pid].address2moduleoffset( ret_addr, mods )
+								# if ret_addr wasnt belonging to any module (perhaps some jitted code in a virtualalloc'd block) then ret_symbol will be empty.
+							end
 							log_data << "    0x#{'%08X' % (ret_addr)} - #{ ret_symbol }\n"
 							hash_full = ::Zlib.crc32( ret_symbol, hash_full )
 							# we copy !exploitable in that we produce a hash from the first 5 symbols in the call stack to help identify similar bugs
@@ -353,10 +364,24 @@ module Grinder
 							break if not data
 						end
 					end
-					
+
 					log_data << "Modules:\n"
 					mods.each do | mod |
-						log_data << "    0x#{'%08X' % (mod.addr)} - #{mod.path.downcase}\n"
+						
+						log_data << "    0x#{'%08X' % (mod.addr)} - #{mod.path.downcase} "
+						
+						begin
+							pe = Metasm::PE.decode_file_header( mod.path )
+							
+							version = pe.decode_version
+							
+							log_data << "- #{version['FileDescription']} " if version['FileDescription']
+							log_data << "- #{version['FileVersion']} " if version['FileVersion']
+							log_data << "\n"
+						rescue
+						end
+						
+						log_data << "\n"
 					end
 					
 					hash = [ "#{ '%08X' % hash_quick }", "#{ '%08X' % hash_full }" ]

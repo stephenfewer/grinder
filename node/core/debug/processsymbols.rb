@@ -109,7 +109,7 @@ module Grinder
 					address_low != 0 ? address_low : nil
 				end
 				
-				def address2symbol( address )
+				def address2symbol( address, mods=nil )
 					sym  = [0x58].pack('L') + 0.chr*4*19 + [512].pack('L') + 0.chr*512
 					#disp = 0.chr*8
 					#sym = [88,0,0,0,0,0,0,0,0,0,0,0,0,0,0,512,0].pack( 'VVQQVVQVQQVVVVVVV' ) + "\x00" * 512
@@ -121,14 +121,14 @@ module Grinder
 						sizeofstruct, typeindex, reserved1, reserved2, index, size, modbase, flags, value, address_high, address_low, register, scope, tag, namelen, maxnamelen, name = sym.unpack( 'VVQQVVQVQVVVVVVVS' )
 						mod_name = ""
 						begin
-							mods = Metasm::WinOS::Process.new( @pid ).modules
+							if( not mods )
+								mods = Metasm::WinOS::Process.new( @pid ).modules
+							end
 							mod_name = mods[ mods.index{ | mod | mod.addr == modbase } ].path.downcase 
 							if( not mod_name.empty? )
 								mod_name = mod_name[ mod_name.rindex('\\')+1, mod_name.length-mod_name.rindex('\\') ]
-								if( mod_name.index( '.dll' ) )
-									mod_name = mod_name[ 0, mod_name.index('.dll') ]
-								elsif( mod_name.index( '.exe' ) )
-									mod_name = mod_name[ 0, mod_name.index('.exe') ]
+								if( mod_name.rindex('.') )
+									mod_name = mod_name[ 0, mod_name.rindex('.') ]
 								end
 								mod_name += "!"
 							end
@@ -138,8 +138,28 @@ module Grinder
 						symnamelen = sym[19*4, 4].unpack('L').first
 
 						#symbol = mod_name + sym[84,sym.length-84].gsub( "\x00", '' )
-						symbol = mod_name + sym[0x54, symnamelen]
-						return symbol
+						return mod_name + sym[0x54, symnamelen]
+					end
+					return ''
+				end
+				
+				def address2moduleoffset( address, mods=nil )
+					if( not mods )
+						mods = Metasm::WinOS::Process.new( @pid ).modules
+					end
+					mods.each do | mod |
+						break if not mod.respond_to?( :size )
+						if( address >= mod.addr and address < (mod.addr + mod.size) )
+							path = mod.path.downcase
+							name = ''
+							if( not path.empty? )
+								name = path[ path.rindex('\\')+1, path.length-path.rindex('\\') ]
+								if( name.rindex('.') )
+									name = name[ 0, name.rindex('.') ]
+								end
+							end
+							return "%s!offset_%08X" % [ name, ( address - mod.addr ) ]
+						end
 					end
 					return ''
 				end

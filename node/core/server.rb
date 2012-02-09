@@ -127,7 +127,7 @@ module Grinder
 				end
 			end
 			
-			def initialize( address, port, browser )
+			def initialize( address, port, browser, fuzzer=nil )
 				@address         = address
 				@port            = port
 				@browser         = browser
@@ -159,6 +159,12 @@ module Grinder
 						if( ext.downcase == '.html' )
 						
 							name = fuzzfile[ 0, fuzzfile.length - ext.length ]
+							
+							# if the user has specified a fuzzer on the command line (via --fuzzer=MyAwesomeFuzzer1) we 
+							# can choose to only load the specified fuzzer and no others.
+							if( fuzzer and fuzzer != name )
+								next
+							end
 							
 							::File.open( "#{fuzzdir}#{fuzzfile}", 'r' ) do | f |
 								print_status( "Adding fuzzer '#{name}' to the Grinder server" )
@@ -238,10 +244,13 @@ if( $0 == __FILE__ )
 	print_status( "Starting at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 	
 	browser = nil
+	fuzzer  = nil
 	
 	ARGV.each do | arg |
 		if( arg.include?( '--browser=' ) )
 			browser = arg[10,arg.length]
+		elsif( arg.include?( '--fuzzer=' ) )
+			fuzzer = arg[9,arg.length]
 		elsif( arg.include?( '--config=' ) )
 			config_file = arg[9,arg.length]
 			begin
@@ -253,7 +262,7 @@ if( $0 == __FILE__ )
 		end
 	end
 	
-	server = Grinder::Core::Server.new( $server_address, $server_port, browser )
+	server = Grinder::Core::Server.new( $server_address, $server_port, browser, fuzzer )
 	
 	server.start
 	

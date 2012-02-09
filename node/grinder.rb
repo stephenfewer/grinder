@@ -21,10 +21,13 @@ class Grinder
 		@browser_type  = nil
 		@browser_class = nil
 		@config_file   = 'config'
+		@fuzzer        = nil
 		
 		arguments.each do | arg |
 			if( arg.include?( '--config=' ) )
 				@config_file = arg[9,arg.length]
+			elsif( arg.include?( '--fuzzer=' ) )
+				@fuzzer = arg[9,arg.length]
 			else
 				arg = arg.upcase
 				if( arg == 'IE' or arg == 'INTERNETEXPLORER' )
@@ -173,7 +176,7 @@ class Grinder
 			kill_thread  = nil
 			
 			if( not $server_pid )
-				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type}" )
+				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) }" )
 				sleep( 2 )
 				print_status( "Started the Grinder server process #{$server_pid}" )
 				server_reset = 12

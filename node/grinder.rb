@@ -23,29 +23,35 @@ class Grinder
 		@config_file   = 'config'
 		@fuzzer        = nil
 		
+		use_browser = lambda do | browser |
+			browser = browser.upcase
+			if( browser == 'IE' or browser == 'INTERNETEXPLORER' )
+				@browser_type  = 'IE'
+				@browser_class = BROWSER_CLASS_IE
+			elsif( browser == 'CM' or browser == 'CHROME' )
+				@browser_type  = 'CM'
+				@browser_class = BROWSER_CLASS_CM
+			elsif( browser == 'FF' or browser == 'FIREFOX' )
+				@browser_type  = 'FF'
+				@browser_class = BROWSER_CLASS_FF
+			elsif( browser == 'SF' or browser == 'SAFARI' )
+				@browser_type  = 'SF'
+				@browser_class = BROWSER_CLASS_SF
+			#elsif( browser == 'OP' or browser == 'OPERA' )
+			#	@browser_type  = 'OP'
+			#	@browser_class = BROWSER_CLASS_OP
+			end
+		end
+		
 		arguments.each do | arg |
 			if( arg.include?( '--config=' ) )
 				@config_file = arg[9,arg.length]
 			elsif( arg.include?( '--fuzzer=' ) )
 				@fuzzer = arg[9,arg.length]
+			elsif( arg.include?( '--browser=' ) )
+				use_browser.call( arg[10,arg.length] )
 			else
-				arg = arg.upcase
-				if( arg == 'IE' or arg == 'INTERNETEXPLORER' )
-					@browser_type  = 'IE'
-					@browser_class = BROWSER_CLASS_IE
-				elsif( arg == 'CM' or arg == 'CHROME' )
-					@browser_type  = 'CM'
-					@browser_class = BROWSER_CLASS_CM
-				elsif( arg == 'FF' or arg == 'FIREFOX' )
-					@browser_type  = 'FF'
-					@browser_class = BROWSER_CLASS_FF
-				elsif( arg == 'SF' or arg == 'SAFARI' )
-					@browser_type  = 'SF'
-					@browser_class = BROWSER_CLASS_SF
-				#elsif( arg == 'OP' or arg == 'OPERA' )
-				#	@browser_type  = 'OP'
-				#	@browser_class = BROWSER_CLASS_OP
-				end
+				use_browser.call( arg )
 			end
 		end
 		
@@ -220,6 +226,17 @@ class Grinder
 end
 
 if( $0 == __FILE__ )
+
+	if( ARGV.include?( '--help' ) or ARGV.include?( '-h' ) or ARGV.include?( '/h' ) or ARGV.include?( '/help' ) )
+		print_simple( "Usage: >ruby.exe grinder.rb [options] [browser]" )
+		print_simple( "  --config=ConfigFile.rb     Specify an alternative config file to use for this node." )
+		print_simple( "  --fuzzer=FuzzerToUse       Specify a single fuzzer to use with this node." )
+		print_simple( "  --browser=BrowserToFuzz    Specify the browser to fuzz (e.g. IE, CM, FF, SF)" )
+		::Kernel.exit( true )
+	elsif( ARGV.include?( '--version' ) or ARGV.include?( '-v' ) or ARGV.include?( '/v' ) or ARGV.include?( '/version' ) )
+		print_simple( "Version #{$version_major}.#{$version_minor}" )
+		::Kernel.exit( true )
+	end
 
 	print_init( 'GRINDER' )
 

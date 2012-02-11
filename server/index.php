@@ -76,6 +76,14 @@
 		<script type="text/javascript" src="scripts/jquery/js/jquery-1.6.2.min.js"></script>
 		<script type="text/javascript" src="scripts/jquery/js/jquery-ui-1.8.16.custom.min.js"></script>
 		<script type="text/javascript" src="scripts/jquery/js/jquery.cookie.js"></script>
+		
+		<script type="text/javascript" src="scripts/jqplot/jquery.jqplot.min.js"></script>
+		<!--[if lt IE 9]><script language="javascript" type="text/javascript" src="scripts/jqplot/excanvas.min.js"></script><![endif]-->
+		<link rel="stylesheet" type="text/css" href="scripts/jqplot/jquery.jqplot.min.css" />
+		<script type="text/javascript" src="scripts/jqplot/plugins/jqplot.barRenderer.min.js"></script>
+		<script type="text/javascript" src="scripts/jqplot/plugins/jqplot.categoryAxisRenderer.min.js"></script>
+		<script type="text/javascript" src="scripts/jqplot/plugins/jqplot.pointLabels.min.js"></script>
+
 		<script type="text/javascript">
 			var owner          =  0;
 			var unique         =  1;
@@ -119,6 +127,39 @@
 				$( "#error-message" ).dialog( "option", "title", title );
 				$( "#error-message" ).dialog( "open" );
 				return false;
+			}
+			
+			function barchart( id, xlabels, series, series_labels )
+			{
+				var div = $( '#' + id )[0];
+				
+				div.plot = $.jqplot( id, series, {
+					seriesDefaults: {
+						renderer: $.jqplot.BarRenderer,
+						rendererOptions: { 
+							fillToZero: true,
+							barWidth: 30
+						},
+						pointLabels: { 
+							show: true
+						}
+					},
+					series: series_labels,
+					legend: {
+						show: true,
+						placement: 'outsideGrid'
+					},
+					axes: {
+						xaxis: {
+							renderer: $.jqplot.CategoryAxisRenderer,
+							ticks: xlabels
+						}
+					}
+				} );
+				
+				div.setAttribute( 'jqplot', true );
+				
+				return true;
 			}
 			
 			$( function() {
@@ -247,12 +288,15 @@
 			<?php
 				if( user_isloggedin() )
 				{
-					echo "	<ul>
-								<li><a href='system.php'>System</a></li>
-								<li><a href='crashes.php'>Crashes</a></li>
-								<li><a href='account.php'>My Account</a></li>
-								<button id='logout_button' title='Logout' style='width:30px;height:30px;'>&nbsp;</button>
-							</ul>";
+					echo "<ul>";
+					echo "<li><a href='system.php'>System</a></li>";
+					echo "<li><a href='crashes.php'>Crashes</a></li>";
+					echo "<li><a href='fuzzers.php'>Fuzzers</a></li>";
+					if( user_isadministrator() )
+						echo "<li><a href='settings.php'>Settings</a></li>";
+					echo "<li><a href='account.php'>My Account</a></li>";
+					echo "<button id='logout_button' title='Logout' style='width:30px;height:30px;'>&nbsp;</button>";
+					echo "</ul>";
 				}
 				else
 				{
@@ -285,14 +329,14 @@
 		<div id="error-message"></div>
 		
 		<div id="about-message">
-			<p>Version: 0.2</p>
+			<p>Version: 0.3-Dev</p>
 			<p>Author: Stephen Fewer of Harmony Security (<a href='http://www.harmonysecurity.com/' target='_blank'>www.harmonysecurity.com</a>)</p>
 			<p>Source Code: <a href='https://github.com/stephenfewer/grinder' target='_blank'>github.com/stephenfewer/grinder</a></p>
 		</div>
 		
 		<center>
 			<div id='footer'>
-				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.2</a>
+				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.3-Dev</a>
 			</div>
 		</center>
 		

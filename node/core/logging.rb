@@ -5,13 +5,16 @@
 #
 		
 $version_major = 0
-$version_minor = 2
+$version_minor = 3
+$version_dev   = true
 
 $print_owner   = ''
 
 def print_init( owner, print_banner=true )
 	$print_owner = owner[0]
 	if( print_banner )
+		ver = "#{owner} - Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }"
+		
 		print_simple( '' )
 		print_simple( '                       ______     _           __         ' )
 		print_simple( '                      / ____/____(_)___  ____/ /__  _____' )
@@ -20,7 +23,7 @@ def print_init( owner, print_banner=true )
 		print_simple( '                    \\____/_/  /_/_/ /_/\\__,_/\\___/_/' )
 		print_simple( '' )
 		print_simple( '        By Stephen Fewer of Harmony Security (www.harmonysecurity.com)' )
-		print_simple( "                                                 #{owner} - Version #{$version_major}.#{$version_minor}" )
+		print_simple( " " * (70-ver.length) + ver )
 		print_simple( '' )
 	end
 end

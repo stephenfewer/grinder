@@ -234,7 +234,7 @@ if( $0 == __FILE__ )
 		print_simple( "  --browser=BrowserToFuzz    Specify the browser to fuzz (e.g. IE, CM, FF, SF)" )
 		::Kernel.exit( true )
 	elsif( ARGV.include?( '--version' ) or ARGV.include?( '-v' ) or ARGV.include?( '/v' ) or ARGV.include?( '/version' ) )
-		print_simple( "Version #{$version_major}.#{$version_minor}" )
+		print_simple( "Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }" )
 		::Kernel.exit( true )
 	end
 

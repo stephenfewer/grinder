@@ -1,3 +1,17 @@
+Version 0.3 - In Development!
+=============================
+
+Server
+------
+	* Added a Fuzzer tab to allow users to view statistics (bar charts) about the fuzzers that have been run in the system. You can also drill down in to individual fuzzers to view what targets they are generating crashes on. Added bar chart support via jqPlot.
+	* Added a Settings tab. Moved the user account management features from the System tab into this new Settings tab.
+	
+Node
+----
+	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Usefull for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
+
+
+
 Version 0.2 - 08 Feb 2012
 =========================
 

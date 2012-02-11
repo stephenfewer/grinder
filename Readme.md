@@ -14,6 +14,8 @@ Grinder Server features:
  
 * Users can view all of the crashes in the system and sort them by node, target, fuzzer, type, hash, time or count.
  
+* Users can view crash statistics for the fuzzers, including total and unique crashes per fuzzer and the targets each fuzzer is generating crashes on.
+
 * Users can hide all duplicate crashes so as to only show unique crashes in the system in order to easily manage new crashes as they occur.
  
 * Users can assign crashes to one another as well as mark a particular crash as interesting, exploitable, uninteresting or unknown.
@@ -143,6 +145,7 @@ The following libraries are included with Grinder and are licensed separately as
 
 * Metasm is licensed under a GNU Lesser General Public License (Please see .\grinder\node\lib\metasm\LICENCE)
 * JQuery is licensed under the MIT license (Please see http://jquery.org/license)
+* jqPlot is licensed under the MIT license (Please see http://www.jqplot.com/info.php)
 * JQuery UI is licensed under the MIT license (Please see http://jquery.org/license)
 * jQuery Cookie plugin is licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
 * dbghelp.dll (v6.12.2.633) and symsrv.dll (v6.12.2.633) are redistributable libraries from the Microsoft Debuggiong Tools for Windows. (Please see .\grinder\node\data\debugging_tools_license.txt)

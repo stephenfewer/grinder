@@ -9,7 +9,7 @@ Server
 Node
 ----
 	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Usefull for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
-
+	* Added a --help and --version parameter to grinder.rb.
 
 
 Version 0.2 - 08 Feb 2012

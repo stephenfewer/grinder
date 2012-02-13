@@ -68,30 +68,30 @@ if( $0 == __FILE__ )
 	if( generate )
 	
 		if( not pubkey )
-			print_error( "Can't generate without a public key file specified to save to (specify one with /pubkey on the command line)." ) if verbose
+			print_error( "Can't generate without a public key file specified to save to (specify one with /pubkey on the command line)." )
 			::Kernel.exit( false )
 		end
 		
 		if( not privkey )
-			print_error( "Can't generate without a private key file specified to save to (specify one with /privkey on the command line)." ) if verbose
+			print_error( "Can't generate without a private key file specified to save to (specify one with /privkey on the command line)." )
 			::Kernel.exit( false )
 		end
 		
 		if( not keypass )
-			print_warning( "Generating an RSA key pair with no password for the private key (specify one with /keypass on the command line)." ) if verbose
+			print_warning( "Generating an RSA key pair with no password for the private key (specify one with /keypass on the command line)." )
 		end
 		
-		print_status( "Generating an RSA key pair (#{keysize} bits)." ) if verbose
+		print_status( "Generating an RSA key pair (#{keysize} bits)." )
 		
 		key_pair = OpenSSL::PKey::RSA.generate( keysize )
 		
-		print_status( "Saving the public key to '#{pubkey}'." ) if verbose
+		print_status( "Saving the public key to '#{pubkey}'." )
 		
 		::File.open( pubkey, 'wb' ) do | f |
 			f.write( key_pair.public_key )
 		end
 			
-		print_status( "Saving the private key to '#{privkey}'. Keep it private!" ) if verbose
+		print_status( "Saving the private key to '#{privkey}'. Keep it private!" )
 		
 		::File.open( privkey, 'wb' ) do | f |
 			if( keypass )
@@ -105,28 +105,28 @@ if( $0 == __FILE__ )
 	elsif( encrypt )
 		
 		if( not pubkey )
-			print_error( "Can't encrypt without a public key (specify one with /pubkey on the command line)." ) if verbose
+			print_error( "Can't encrypt without a public key (specify one with /pubkey on the command line)." )
 			::Kernel.exit( false )
 		end
 		
 		if( not inputfile )
-			print_error( "Can't encrypt without an input file (specify one with /inputfile on the command line)." ) if verbose
+			print_error( "Can't encrypt without an input file (specify one with /inputfile on the command line)." )
 			::Kernel.exit( false )
 		end
 				
-		print_status( "Reading the input data from '#{inputfile}'." ) if verbose
+		print_status( "Reading the input data from '#{inputfile}'." )
 				
 		inputdata  = ::File.read( inputfile )
 		
-		print_status( "Reading the public key from '#{pubkey}'." ) if verbose
+		print_status( "Reading the public key from '#{pubkey}'." )
 		
 		public_key = OpenSSL::PKey::RSA.new( ::File.read( pubkey ) )
 		
-		print_status( "Encrypting the input data with the public key." ) if verbose
+		print_status( "Encrypting the input data with the public key." )
 		
 		encrypted  = Grinder::Core::Crypt.encrypt( public_key, inputdata )
 		
-		print_status( "Writing the encrypted data to '#{outputfile ? outputfile : 'stdout' }'" ) if verbose
+		print_status( "Writing the encrypted data to '#{outputfile ? outputfile : 'stdout' }'" )
 		
 		if( outputfile )
 			::File.open( outputfile, 'wb' ) do | f |
@@ -139,12 +139,12 @@ if( $0 == __FILE__ )
 	elsif( decrypt )
 	
 		if( not privkey )
-			print_error( "Can't decrypt without a private key (specify one with /privkey on the command line)." ) if verbose
+			print_error( "Can't decrypt without a private key (specify one with /privkey on the command line)." )
 			::Kernel.exit( false )
 		end
 		
 		if( not inputfile )
-			print_error( "Can't decrypt without an input file (specify one with /inputfile on the command line)." ) if verbose
+			print_error( "Can't decrypt without an input file (specify one with /inputfile on the command line)." )
 			::Kernel.exit( false )
 		end
 		

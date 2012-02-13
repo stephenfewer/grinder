@@ -9,10 +9,12 @@ $version_minor = 3
 $version_dev   = true
 
 $print_owner   = ''
+$verbose       = true
 
-def print_init( owner, print_banner=true )
+def print_init( owner, verbose=true )
+	$verbose     = verbose
 	$print_owner = owner[0]
-	if( print_banner )
+	if( $verbose )
 		ver = "#{owner} - Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }"
 		
 		print_simple( '' )
@@ -33,19 +35,19 @@ def print_simple( message )
 end
 
 def print_status( message )
-	$stdout.puts( "[+#{$print_owner}+] #{message}" )
+	$stdout.puts( "[+#{$print_owner}+] #{message}" ) if $verbose
 end
 
 def print_warning( message )
-	$stdout.puts( "[!#{$print_owner}!] #{message}" )
+	$stdout.puts( "[!#{$print_owner}!] #{message}" ) if $verbose
 end
 
 def print_error( message )
-	$stdout.puts( "[-#{$print_owner}-] #{message}" )
+	$stdout.puts( "[-#{$print_owner}-] #{message}" ) if $verbose
 end
 
 def print_alert( message )
-	$stdout.puts( "[*#{$print_owner}*] #{message}" )
+	$stdout.puts( "[*#{$print_owner}*] #{message}" ) if $verbose
 end
 
 # Modified from the Metasploit REX library (\msf3\lib\rex\text.rb) (BSD Licensed)

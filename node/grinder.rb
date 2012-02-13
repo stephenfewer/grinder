@@ -226,19 +226,24 @@ class Grinder
 end
 
 if( $0 == __FILE__ )
-
+	
+	verbose = true
+	
 	if( ARGV.include?( '--help' ) or ARGV.include?( '-h' ) or ARGV.include?( '/h' ) or ARGV.include?( '/help' ) )
 		print_simple( "Usage: >ruby.exe grinder.rb [options] [browser]" )
 		print_simple( "  --config=ConfigFile.rb     Specify an alternative config file to use for this node." )
 		print_simple( "  --fuzzer=FuzzerToUse       Specify a single fuzzer to use with this node." )
 		print_simple( "  --browser=BrowserToFuzz    Specify the browser to fuzz (e.g. IE, CM, FF, SF)" )
+		print_simple( "  --quiet                    Don't print any status/error messages to stdout" )
 		::Kernel.exit( true )
 	elsif( ARGV.include?( '--version' ) or ARGV.include?( '-v' ) or ARGV.include?( '/v' ) or ARGV.include?( '/version' ) )
 		print_simple( "Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }" )
 		::Kernel.exit( true )
+	elsif( ARGV.include?( '--quiet' ) or ARGV.include?( '-q' ) or ARGV.include?( '/q' ) or ARGV.include?( '/quiet' ) )
+		verbose = false
 	end
 
-	print_init( 'GRINDER' )
+	print_init( 'GRINDER', verbose )
 
 	print_status( "Starting at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 	

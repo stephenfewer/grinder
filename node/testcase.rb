@@ -7,180 +7,155 @@
 $:.unshift('.')
 
 require 'core/logging'
-require 'rexml/document'
+require 'core/xmlcrashlog'
 
-def parse_log_xml( filename )
-	document = nil
-	
-	::File.open( filename, 'r' ) do | f |
+class Testcase
 
-		xml = f.read( f.stat.size )
+	def initialize( arguments )
 
-		xml = xml.gsub( '<div>', '&lt;div&gt;' )
-		xml = xml.gsub( '<p>', '&lt;p&gt;' )
-		xml = xml.gsub( '</p>', '&lt;/p&gt;' )
-		xml = xml.gsub( "\n", '' )
+		@log_file  = nil
+		
+		@save_file = nil
 
-		data     = "<?xml version='1.0'?><logs>" + xml + "</logs>"
-		document = ::REXML::Document.new( data )
-	end
+		@skip_elem = []
 
-	logs = ::Array.new
-	
-	document.elements.each do | root |
-		next if( root.name.downcase != 'logs' )
-		root.each do | element1 |
-			next if( element1.name.downcase != 'log' )
-			log = ::Hash.new
-			element1.each do | element2 |
-				if( element2.name == 'idx' )
-					log[element2.name] = element2.text.to_i
-				elsif( element2.name == 'count' )
-					log[element2.name] = element2.text.to_i
-				else
-					log[element2.name] = element2.text
+		testcase_prepend = %Q|
+				var bigbuff = '';
+				var dynamic_params = [];
+				for( var b=0 ; b<1111 ; b++ ) { bigbuff += unescape( '%u4141%u4141' ); }
+		|
+
+		testcase_fixups = {
+			']( , '         => ']( \'\', ',
+			' = ;'          => ' = \'\';',
+			',  );'         => ', \'\' );',
+			'BBBB'          => '\'BBBB\'',
+			'<div>'         => '\'<div>\'',
+			'ohhh<p>no</p>' => '\'ohhh<p>no</p>\'',
+			'?'*2222        => 'bigbuff'
+		}
+		
+		@opts = {
+			# surround each logged javascript line in the testcase() function with a try/catch block
+			'try_catch'                 => true,
+			# if a single log message just contains a comment, print it or not.
+			# Note: code snippits should be commented with /* ...code... */ while normal comment messages should be commented with // ...message...
+			'print_code_comments'       => true,
+			'print_message_comments'    => true,
+			# include the following inside the testcases <style>...</style>
+			'testcase_style'            => "v\:* { behavior: url(#default#VML); }",
+			# include the following inside the testcases <script>...</script>
+			'testcase_script'           => '',
+			# include the following at the begining of the testcases testcase() function
+			'testcase_prepend_function' => testcase_prepend,
+			# include the following at the end of the testcases testcase() function
+			'testcase_append_function'  => '',
+			# help fixup any issues with your testcases by gsubbing the key with the value (handy if you previously miss-logged something)
+			'testcase_fixups'           => testcase_fixups,
+			# include the following inside the testcases <head>...</head>
+			'testcase_head'             => '',
+			# include the following inside the testcases <body>...</body>
+			'testcase_body'             => "<div id='zoo'></div>"
+		}
+
+		arguments.each do | arg |
+			if( arg.include?( '--log=' ) )
+				@log_file = arg[6,arg.length]
+			elsif( arg.include?( '--save=' ) )
+				@save_file = arg[7,arg.length]
+			elsif( arg.start_with?( '-id_' ) )
+				@skip_elem << arg.gsub( '-id_', 'id_' )
+			else
+				case arg
+					when '-try'
+						@opts['try_catch'] = false
+					when '-codecomments'
+						@opts['print_code_comments'] = false	
+					when '-messagecomments'
+						@opts['print_message_comments'] = false	
+					when '-comments'
+						@opts['print_code_comments'] = @opts['print_message_comments'] = false	
 				end
 			end
-			logs << log
 		end
+
 	end
 	
-	logs
+	def systest
+	
+		if( not @log_file )
+			print_error( "A valid log file has not been specified. Use the --log=FILE param." )
+			return false
+		end
+		
+		if( not ::File.exist?( @log_file ) )
+			print_error( "Failed to open the log file '#{@log_file}'." )
+			return false
+		end
+		
+		return true
+	end
+	
+	def run
+	
+		if( not systest() )
+			print_error( "System test failed! Please ensure this Grinder node is installed correctly." )
+			return false
+		end
+		
+		xmlcrashlog = XmlCrashLog.new( @log_file )
+		
+		if( not xmlcrashlog.parse )
+			print_error( "Error, Failed to parse the xml crash log file '#{@log_file}'." )
+			return false
+		end
+		
+		html = xmlcrashlog.generate_html( @opts, @skip_elem )
+		
+		if( @save_file )
+			::File.open( @save_file, 'w' ) do | dest |
+				dest.write( html )
+			end
+			
+			print_status( "Generated and saved the testcase to '#{@save_file}'." )
+		else
+			print_simple( html )
+		end
+
+		return true		
+	end
 end
 
-def count_log_idz( logs, count=0 )
-	logs.each do | log |
-		if( log['message'].include?( 'id_' + count.to_s ) )
-			return count_log_idz( logs, count+1 )
-		end
-	end
-	return count - 1
-end
-	
 if( $0 == __FILE__ )
+	
+	verbose = true
+	
+	if( ARGV.include?( '--help' ) or ARGV.include?( '-h' ) or ARGV.include?( '/h' ) or ARGV.include?( '/help' ) )
+		print_simple( "Usage: >ruby.exe testcase.rb [options] [--save=FILE] --log=FILE" )
+		print_simple( "  --log=FILE          The path of a log file to generate the testcase from." )
+		print_simple( "  --save=FILE         The file to save the generated tetcase to (If not specified will print to stdout)." )
+		print_simple( "  --quiet             Don't print any status/error messages to stdout" )
+		print_simple( "  -try                Do not surround all lines in try/catch statements." )
+		print_simple( "  -comments           Do not include any commented statements (either code or messages)." )
+		print_simple( "  -codecomments       Do not include any commented code statements (/* ...code... */)." )
+		print_simple( "  -messagecomments    Do not include any commented message statements (// ...message...)." )
+		::Kernel.exit( true )
+	elsif( ARGV.include?( '--version' ) or ARGV.include?( '-v' ) or ARGV.include?( '/v' ) or ARGV.include?( '/version' ) )
+		print_simple( "Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }" )
+		::Kernel.exit( true )
+	elsif( ARGV.include?( '--quiet' ) or ARGV.include?( '-q' ) or ARGV.include?( '/q' ) or ARGV.include?( '/quiet' ) )
+		verbose = false
+	end
 
-	log_file          = nil
-	try_catch         = true
-	comment_undefined = false
-	print_tickle      = false
-	print_comments    = true
-	
-	skip_elem_id = []
-	
-	ARGV.each_index do | index |
-		if( ARGV[index].start_with?( '-id_' ) )
-			skip_elem_id << ARGV[index].gsub( '-id_', 'id_' )
-		else
-			case ARGV[index]
-				when '+tickle'
-					print_tickle = true
-				when '-tickle'
-					print_tickle = false
-				when '+try'
-					try_catch = true
-				when '-try'
-					try_catch = false
-				when '+comments'
-					print_comments = true	
-				when '-comments'
-					print_comments = false	
-			end
-		end
-	end
-	
-	log_file = ARGV[ ARGV.length - 1 ]
-		
-	logs = parse_log_xml( log_file )
+	print_init( 'TESTCASE', verbose )
 
-	idz  = count_log_idz( logs )
-
-	logs = logs.sort_by do | log |
-		log['idx']
-	end
+	print_status( "Starting at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 	
-	print_simple( "<!doctype html>" )
-	print_simple( "<html>" )
-	print_simple( "\t<head>" )
-	print_simple( "\t\t<title>#{log_file}</title>" )
-	print_simple( "\t\t<style>" )
-	print_simple( "\t\t\tv\:* { behavior: url(#default#VML);}" )
-	print_simple( "\t\t</style>" )
-	print_simple( "\t\t<script type='text/javascript' src='tickle_and_explore.js'></script>" ) if print_tickle
-	print_simple( "\t\t<script>" )
-	print_simple( "\t\t\tfunction testcase()" )
-	print_simple( "\t\t\t{" )
-	print_simple( "\t\t\t\tvar bigbuff = '';" )
-	print_simple( "\t\t\t\tvar dynamic_params = [];" )
-	print_simple( "\t\t\t\tfor( var b=0 ; b<1111 ; b++ )" )
-	print_simple( "\t\t\t\t\tbigbuff += unescape( '%u4141%u4141' );" )
-	print_simple( "" )
-		
-	0.upto( idz ) do | i |
-		print_simple( "\t\t\t\tvar id_" + i.to_s + " = null;" )
-	end
+	testcase = Testcase.new( ARGV )
 	
-	print_simple( "" )
+	success = testcase.run
 	
-	clone_idx         = 0;
+	print_status( "Finished at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 	
-	logs.each do | log |
-		message = log['message']
-		message = message.gsub( '&lt;', '<' )
-		message = message.gsub( '&gt;', '>' )
-		message = message.gsub( ']( , ', ']( \'\', ' )
-		message = message.gsub( ' = ;', ' = \'\';' )
-		message = message.gsub( ',  );', ', \'\' );' )
-		message = message.gsub( 'BBBB', '\'BBBB\'' )
-		message = message.gsub( '<div>', '\'<div>\'' )
-		message = message.gsub( 'ohhh<p>no</p>', '\'ohhh<p>no</p>\'' )
-		message = message.gsub( '?'*2222, 'bigbuff' )
-		
-		skip = false
-		
-		skip_elem_id.each do | elem_id |
-			if( message.index( elem_id ) )
-				skip = true
-				break
-			end
-		end
-		
-		if(  message.index( '/*' ) and message.index( '*/' ) )
-			skip = true if not print_comments
-		end
-		
-		next if skip
-		
-		if( message.index('document.createElement') )
-			print_simple( "\t\t\t\t" );
-		end
-		
-		if( log['count'] > 1 )
-			print_simple( "\t\t\t\tfor( var i=0 ; i<#{log['count']} ; i++ ) {" )
-		end
-		
-		tabs = log['count'] > 1 ? "\t\t\t\t\t" : "\t\t\t\t"
-		
-		if( message.index('tickle(') and print_tickle )
-			print_simple( tabs + "try { " + message[3,message.length-6] + " } catch(e){}" )
-		else
-			if( try_catch )
-				print_simple( "#{tabs}try { #{ message} } catch(e){}" )
-			else
-				print_simple( "#{tabs}#{message}" )
-			end
-		end
-		
-		if( log['count'] > 1 )
-			print_simple( "\t\t\t\t}" )
-		end
-	end
-	print_simple( "\t\t\t}" )
-	print_simple( "\t\t</script>" )
-	print_simple( "\t</head>" )
-	print_simple( "\t<body onload='testcase();'>" )
-	print_simple( "\t\t<div id='zoo'></div>" )
-	print_simple( "\t</body>" )
-	print_simple( "</html>" )
-	
-	::Kernel::exit( true )
+	::Kernel::exit( success )
 end

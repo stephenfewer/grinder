@@ -96,7 +96,7 @@ For a quick start, the steps for installing a node are as follows:
 
 * Finally to run the node issue a Ruby command as shown below where the browser parameter is the browser you want to fuzz (e.g. IE, FF or CM).
 
-> .\grinder\node\>ruby grinder.rb [--config=c:\path\to\alternative\config.rb] BROWSER
+> .\grinder\node\>ruby grinder.rb [--config=c:\path\to\alternative\config.rb] --browser=BROWSER
 
 Setting Up Encryption For Crash Information
 ===========================================

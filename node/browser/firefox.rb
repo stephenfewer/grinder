@@ -17,6 +17,10 @@ module Grinder
 		
 		class FireFox < Grinder::Core::Debugger
 			
+			def self.target_exe
+				return $firefox_exe
+			end
+			
 			def extra_symbol_server
 				return 'http://symbols.mozilla.org/firefox'
 			end
@@ -129,17 +133,6 @@ end
 
 if( $0 == __FILE__ )
 
-	ARGV.each do | arg |
-		if( arg.include?( '--config=' ) )
-			config_file = arg[9,arg.length]
-			
-			if( not config_init( config_file ) )
-				print_error( "Failed to load the config file '#{config_file}'." )
-				::Kernel::exit( false )
-			end	
-		end
-	end
-	
-	Grinder::Core::Debugger.main( $firefox_exe, Grinder::Browser::FireFox )
+	Grinder::Core::Debugger.main( Grinder::Browser::FireFox, ARGV )
 
 end

@@ -18,15 +18,18 @@ module Grinder
 		
 			class Debugger < Metasm::WinDbgAPI
 
-				def initialize( crashes_dir, target, target_url, logdir=nil  )
-					super( target + ( extra_param ? ' ' + extra_param : '' ) + ' ' + target_url, true )
+				STATUS_STACK_BUFFER_OVERRUN = 0xC0000409 # /GS Exception
+				
+				def initialize( crashes_dir, target_exe, reduction, target_url, logdir=nil  )
+					super( target_exe + ( extra_param ? ' ' + extra_param : '' ) + ' ' + target_url, true )
 					@browser     = ''
 					@crashes_dir = crashes_dir
+					@reduction   = reduction
 					@logger      = 'grinder_logger.dll'
 					@logdir      = logdir ? logdir : ENV['TEMP']
 					@attached    = ::Hash.new
 					Grinder::Core::Debug::ProcessSymbols.init( extra_symbol_server() )
-					print_status( "Running '#{target}'" )
+					print_status( "Running '#{target_exe}'" )
 				end
 				
 				def extra_param
@@ -117,23 +120,26 @@ module Grinder
 				end
 
 				def handler_newthread( pid, tid, info )
-					if( @attached.has_key?( pid ) )
-						if( not @attached[pid].logger_injected )
-							@attached[pid].logger_injected = inject_logger_dll( pid )
+					# if we are performing some form of testcase reduction we dont need to inject grinder_logger.dll
+					if( not @reduction )
+						if( @attached.has_key?( pid ) )
+							if( not @attached[pid].logger_injected )
+								@attached[pid].logger_injected = inject_logger_dll( pid )
+							end
 						end
-					end
-					
-					# Note: we dont rely on handler_loaddll() for dll load notification as we often dont recieve them all.
-					#if everything is loaded for this process we do not itterate through this.
-					if( not @attached[pid].all_loaded or not @attached[pid].logger_loaded )
-						proc = Metasm::WinOS::Process.new( pid )
-						proc.modules.each do | mod |
-							if( mod.path.include?( 'grinder_logger' ) )
-								if( not @attached[pid].logger_loaded )
-									@attached[pid].logger_loaded = loader_logger( pid, mod.addr )
+						
+						# Note: we dont rely on handler_loaddll() for dll load notification as we often dont recieve them all.
+						#if everything is loaded for this process we do not itterate through this.
+						if( not @attached[pid].all_loaded or not @attached[pid].logger_loaded )
+							proc = Metasm::WinOS::Process.new( pid )
+							proc.modules.each do | mod |
+								if( mod.path.include?( 'grinder_logger' ) )
+									if( not @attached[pid].logger_loaded )
+										@attached[pid].logger_loaded = loader_logger( pid, mod.addr )
+									end
+								else 
+									loaders( pid, mod.path, mod.addr )
 								end
-							else 
-								loaders( pid, mod.path, mod.addr )
 							end
 						end
 					end
@@ -151,6 +157,7 @@ module Grinder
 				end
 				
 				def handler_exception( pid, tid, info )
+
 					if( info.code == Metasm::WinAPI::STATUS_ACCESS_VIOLATION )
 					
 						#if( info.recordptr != 0 )
@@ -167,8 +174,9 @@ module Grinder
 							#p "exceptioncode = 0x#{'%08X' % exceptioncode }"
 						#end
 					
-						data, hash = log( pid, tid )
+						data, hash, verified = log( pid, tid )
 						name = 'Access Violation'
+						# see ExceptionInformation @ http://msdn.microsoft.com/en-us/library/windows/desktop/aa363082(v=vs.85).aspx
 						if( info.nparam >= 1 )
 							type = info.info[0]
 							if( type == 0 )
@@ -177,29 +185,33 @@ module Grinder
 								name = 'Write Access Violation'
 							elsif( type == 8 )
 								name = 'Execute Access Violation'
+								verified = Grinder::Core::WebStats::VERIFIED_INTERESTING
 							end
 						end
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, name, pid, data, hash )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, name, pid, data, hash, verified )
+					elsif( info.code == STATUS_STACK_BUFFER_OVERRUN )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Stack Buffer Overrun', pid, data, hash, Grinder::Core::WebStats::VERIFIED_INTERESTING )
 					elsif( info.code == Metasm::WinAPI::STATUS_ILLEGAL_INSTRUCTION )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Illegal Instruction', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Illegal Instruction', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_GUARD_PAGE_VIOLATION )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Guard Page Violation', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Guard Page Violation', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_NONCONTINUABLE_EXCEPTION )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Noncontinuable Exception', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Noncontinuable Exception', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_PRIVILEGED_INSTRUCTION )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Privileged Instruction', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Privileged Instruction', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_STACK_OVERFLOW )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Stack Overflow', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Stack Overflow', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_INTEGER_DIVIDE_BY_ZERO )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Divide By Zero', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Divide By Zero', pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_IN_PAGE_ERROR )
-						data, hash = log( pid, tid )
+						data, hash, verified = log( pid, tid )
 						name = 'Page Error'
 						if( info.nparam >= 1 )
 							type = info.info[0]
@@ -209,12 +221,13 @@ module Grinder
 								name = 'Write Page Error'
 							elsif( type == 8 )
 								name = 'Execute Page Error'
+								verified = Grinder::Core::WebStats::VERIFIED_INTERESTING
 							end
 						end
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, name, pid, data, hash )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, name, pid, data, hash, verified )
 					elsif( info.code == Metasm::WinAPI::STATUS_ARRAY_BOUNDS_EXCEEDED )
-						data, hash = log( pid, tid )
-						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Array Bounds Exceeded', pid, data, hash )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Array Bounds Exceeded', pid, data, hash, verified )
 					end
 					
 					super( pid, tid, info )
@@ -284,6 +297,8 @@ module Grinder
 
 				def log( pid, tid )
 
+					verified = Grinder::Core::WebStats::VERIFIED_UNKNOWN
+					
 					# seed the crash hashes first...
 					hash_full  = ::Zlib.crc32( $hash_seed )
 					hash_quick = ::Zlib.crc32( $hash_seed )
@@ -377,7 +392,6 @@ module Grinder
 							
 							log_data << "- #{version['FileDescription']} " if version['FileDescription']
 							log_data << "- #{version['FileVersion']} " if version['FileVersion']
-							log_data << "\n"
 						rescue
 						end
 						
@@ -386,7 +400,7 @@ module Grinder
 					
 					hash = [ "#{ '%08X' % hash_quick }", "#{ '%08X' % hash_full }" ]
 					
-					return [ log_data, hash ]
+					return [ log_data, hash, verified ]
 				end
 
 				#def kill
@@ -403,20 +417,37 @@ module Grinder
 						# stop debugging this process!
 						Metasm::WinAPI.debugactiveprocessstop( e.pid )
 						# log the crash to the console and optionally to the web
+						#if( @reduction )
+							#print_alert( "Got a crash '#{e.hash}' during reduction." )
+							# check a list of previous crashes (passed on the commandline? or via testcase server request?) to see if we have a duplicate (different from the grinder server having dups which is fine)
+							# we want to avoid generating 100s of reduction all generating the same crash, we are only interested in reduction generating new crashes (even if they are dups so long as they are unique to this reduction)
+							#if( e.duplicate? )
+							# if crash is unique to this reduction, we want to log it to remote server and save local (encrypted) log/crash files. 
+							# we must tell reduction.rb the last testcase generated a crash
+							
+							# we also need to know if a new crash from a reduction came from a different crash, so we can update teh crashes 'parent' on the grinder server
+						#else
 						
-						crash_data = e.save_crash()
-						log_data   = e.save_log( logger_file( e.pid ) )
-						
-						if( not crash_data )
-							print_error( "Failed to save the crash file." )
+						if( @reduction )
+							e.set_testcase_crash
 						end
 						
-						if( not log_data )
-							print_error( "Failed to save the log file." )
+						#if( not @reduction or ( @reduction and not e.duplicate? ) )
+						if( not @reduction )
+							crash_data = e.save_crash()
+							log_data   = e.save_log( logger_file( e.pid ) )
+							
+							if( not crash_data )
+								print_error( "Failed to save the crash file." )
+							end
+							
+							if( not log_data )
+								print_error( "Failed to save the log file." )
+							end
+							
+							e.log( crash_data, log_data )
 						end
-						
-						e.log( crash_data, log_data )
-						
+
 						return 1
 					rescue ::Interrupt
 						print_error( "Received an interrupt in main debugger loop." )
@@ -424,9 +455,38 @@ module Grinder
 					return 0
 				end
 				
-				def self.main( target_exe, klass )
-				
-					print_init( 'DEBUGGER', false )
+				def self.main( klass, arguments )
+					
+					config_file = 'config'
+					
+					target_path = '/grinder'
+					
+					reduction   = false
+					
+					verbose     = true
+					
+					arguments.each do | arg |
+						if( arg.include?( '--config=' ) )
+							config_file = arg[9,arg.length]
+						elsif( arg.include?( '--path=' ) )
+							target_path = arg[7,arg.length]
+						elsif( arg.include?( '--reduction' ) )
+							reduction = true
+						elsif( arg.include?( '--quiet' ) )
+							verbose = false
+						end
+					end
+					
+					if( not config_init( config_file ) )
+						print_error( "Failed to load the config file '#{config_file}'." )
+						::Kernel::exit( false )
+					end
+							
+					if( not config_test() )
+						::Kernel::exit( false )
+					end
+					
+					print_init( 'DEBUGGER', verbose, false )
 
 					print_status( "Starting at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 					
@@ -434,7 +494,9 @@ module Grinder
 						print_error( "Failed to get debug privilege, quiting." )
 						::Kernel::exit( -1 )
 					end
-									
+					
+					target_exe = klass.target_exe
+
 					# Scan for any already running processes and fail as if we havent spawned/debugged them all we can fail (As is the case with IE).
 					exe_file = target_exe[ target_exe.rindex('\\')+1, target_exe.length-target_exe.rindex('\\') ]
 					Metasm::WinOS.list_processes.each do | proc |
@@ -447,11 +509,11 @@ module Grinder
 						end
 					end
 					
-					target_url  = 'http://' + $server_address + ':' + $server_port.to_s + '/grinder'
+					target_url = 'http://' + $server_address + ':' + $server_port.to_s + target_path
 					
-					debugger = klass.new( $crashes_dir, target_exe, target_url, $logger_dir )
+					debugger   = klass.new( $crashes_dir, target_exe, reduction, target_url, $logger_dir )
 
-					status = debugger.monitor
+					status     = debugger.monitor
 
 					print_status( "Finished at #{::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )}" )
 

@@ -22,6 +22,7 @@ class Grinder
 		@browser_class = nil
 		@config_file   = 'config'
 		@fuzzer        = nil
+		@verbose       = true
 		
 		use_browser = lambda do | browser |
 			browser = browser.upcase
@@ -44,7 +45,9 @@ class Grinder
 		end
 		
 		arguments.each do | arg |
-			if( arg.include?( '--config=' ) )
+			if( arg.include?( '--quiet' ) )
+				@verbose = false
+			elsif( arg.include?( '--config=' ) )
 				@config_file = arg[9,arg.length]
 			elsif( arg.include?( '--fuzzer=' ) )
 				@fuzzer = arg[9,arg.length]
@@ -59,11 +62,8 @@ class Grinder
 	
 	def systest
 	
-		ruby_major = RUBY_VERSION.split( '.' )[0].to_i
-		ruby_minor = RUBY_VERSION.split( '.' )[1].to_i
-
-		if( ruby_major < 1 and ruby_minor < 9 )
-			print_warning( "Warning, you should be running this on at least Ruby 1.9" )
+		if( not config_test() )
+			return false
 		end
 		
 		# this is kinda hacky but it should prevent people from trying to run the node incorectly.
@@ -94,54 +94,6 @@ class Grinder
 				end
 			rescue
 				print_error( "Error, the grinder logger DLL '#{grinder_logger}' does not exist. Please manually copy this file from the \\grinder\\node\\data\\ directory." )
-				return false
-			end
-		end
-			
-		if( not ::Dir.exist?( $logger_dir ) )
-			print_error( "Error, the temporary logging directory ('#{$logger_dir }') does not exist." )
-			return false
-		end
-		
-		if( not ::Dir.exist?( $crashes_dir ) )
-			print_error( "Error, the Crashes directory ('#{$crashes_dir }') does not exist." )
-			return false
-		end
-		
-		if( not ::Dir.exist?( $fuzzers_dir ) )
-			print_error( "Error, the Fuzzers directory ('#{$fuzzers_dir }') does not exist." )
-			return false
-		end
-		
-		if( not ::Dir.exist?( $symbols_dir ) )
-			print_error( "Error, the Symbols directory ('#{$symbols_dir }') does not exist." )
-			return false
-		end
-		
-		if( $debugger_restart_minutes < 5 )
-			print_warning( "Warning, you have set the debugger to restart every #{$debugger_restart_minutes} minutes, The Grinder Server will see this node as inactive unless you use a value of more than 5 minutes." )
-		end
-		
-		if( $webstats_baseurl and not $webstats_baseurl.end_with?( 'status.php' ) )
-			print_warning( "Warning, the URL to your Grinder Server (#{@webstats_baseurl}) does not point to status.php. Please ensure this URL exists on your Grinder Server." )
-		end
-		
-		if( $crashes_encrypt )
-			begin
-				require 'openssl'
-			rescue ::LoadError
-				print_error( "Failed to require openssl. Encrypting crashes will not work without it." )
-				return false
-			end
-			
-			if( not ::File.exist?( $public_key_file ) )
-				print_error( "Failed to open the public key file '#{$public_key_file}'. Encrypting crashes will not work without it." )
-				return false
-			end
-			
-			key = OpenSSL::PKey::RSA.new( ::File.read( $public_key_file ) )
-			if( not key.public? )
-				print_error( "The public key file '#{$public_key_file}' has no public key!" )
 				return false
 			end
 		end
@@ -180,15 +132,15 @@ class Grinder
 		while( true )
 		
 			kill_thread  = nil
-			
+
 			if( not $server_pid )
-				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) }" )
+				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) } #{ ( not @verbose ? '--quiet' : '' ) }" )
 				sleep( 2 )
 				print_status( "Started the Grinder server process #{$server_pid}" )
 				server_reset = 12
 			end
 			
-			$debugger_pid = ::Process.spawn( "ruby -I. #{@browser_class} --config=#{@config_file}" )
+			$debugger_pid = ::Process.spawn( "ruby -I. #{@browser_class} --config=#{@config_file} --path=/grinder #{ ( not @verbose ? '--quiet' : '' ) }" )
 			print_status( "Started the Grinder debugger process #{$debugger_pid}" )
 			
 			if( $debugger_pid and $debugger_restart_minutes )
@@ -197,14 +149,26 @@ class Grinder
 				# a crash and a browser memory leak gobbeling up a grinder nodes memory (or the browser being
 				# deadlocked for some reason).
 				kill_thread = ::Thread.new do
+					
 					sleep( $debugger_restart_minutes * 60 )
+					
 					print_status( "Killing the debugger process #{$debugger_pid} after #{$debugger_restart_minutes} minutes." )
-					::Process.kill( "KILL", $debugger_pid )
+
+					begin
+						::Process.kill( "KILL", $debugger_pid )
+					rescue ::Errno::ESRCH
+					end
+					
 					if( server_reset <= 0 )
 						# every X times kill/restart the web server as their seems to be a memory leak (Due to event handles on Windows 2008)...
 						print_status( "Killing the server process #{$server_pid}." )
-						::Process.kill( "KILL", $server_pid )
-						::Process.wait( $server_pid )
+
+						begin
+							::Process.kill( "KILL", $server_pid )
+							::Process.wait( $server_pid )
+						rescue ::Errno::ESRCH
+						end
+						
 						$server_pid = nil
 					else
 						server_reset -= 1
@@ -212,8 +176,14 @@ class Grinder
 				end
 			end
 			# block for the debugger to either exit due to a crash or to be killed by the above kill_thread
-			::Process.wait( $debugger_pid )
+
+			begin
+				::Process.wait( $debugger_pid )
+			rescue ::Errno::ESRCH
+			end
+			
 			$debugger_pid = nil
+			
 			# if the kill_thread is still alive by here we kill it
 			if( kill_thread and kill_thread.alive? )
 				kill_thread.kill

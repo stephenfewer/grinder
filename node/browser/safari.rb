@@ -12,7 +12,11 @@ module Grinder
 	module Browser
 	
 		class Safari < Grinder::Core::Debugger
-
+		
+			def self.target_exe
+				return $safari_exe
+			end
+			
 			def loaders( pid, path, addr )
 				if( path.include?( 'JavaScriptCore' ) )
 					@browser = 'SF'
@@ -182,17 +186,6 @@ end
 
 if( $0 == __FILE__ )
 
-	ARGV.each do | arg |
-		if( arg.include?( '--config=' ) )
-			config_file = arg[9,arg.length]
-			
-			if( not config_init( config_file ) )
-				print_error( "Failed to load the config file '#{config_file}'." )
-				::Kernel::exit( false )
-			end	
-		end
-	end
-	
-	Grinder::Core::Debugger.main( $safari_exe, Grinder::Browser::Safari )
+	Grinder::Core::Debugger.main( Grinder::Browser::Safari, ARGV )
 
 end

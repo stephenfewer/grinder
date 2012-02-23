@@ -64,7 +64,7 @@ $logger_dir               = 'C:\\Users\\%USERNAME%\\AppData\\Local\\Temp\\Low\\'
 $hash_seed                = 'A4954BC7ABD1151282A0B17DBC67BF07'
 
 # If more then 1 fuzzer is available to this grinder node, we can swap the fuzzers every N testcases.
-$swap_fuzzer_count        = 100000
+$swap_fuzzer_count        = 10000
 
 # The number of minutes to wait before killing the debugger (and attached browser process) and 
 # restart from the beginning to avoid browser memory leaks consuming too much system memory. 
@@ -86,3 +86,32 @@ $safari_exe               = 'C:\\%PROGRAM_FILES_32%\\Safari\\Safari.exe'
 
 # Configure the opera browser...
 $opera_exe                = 'C:\\%PROGRAM_FILES_32%\\Opera\\opera.exe'
+
+################################################################################
+#         Extra configuration for generating testcases from log files          #
+################################################################################
+# These options will get merged with the options in testcase.rb for use when generating a testcase via a log file (Note: not used during fuzzing).
+$testcase_opts = {
+	# surround each logged javascript line in the testcase() function with a try/catch block
+	'try_catch'                 => true,
+	# if a single log message just contains a comment, print it or not.
+	# Note: code snippits should be commented with /* ...code... */ while normal comment messages should be commented with // ...message...
+	'print_code_comments'       => true,
+	'print_message_comments'    => true,
+	# if you print code comments (/* ...code... */) you can choose to uncomment them so the code is processed as code.
+	'uncomment_code_comments'   => false,
+	# include the following inside the testcases <style>...</style>
+	'testcase_style'            => '',
+	# include the following inside the testcases <script>...</script>
+	'testcase_script'           => '',
+	# include the following at the begining of the testcases testcase() function
+	'testcase_prepend_function' => '',
+	# include the following at the end of the testcases testcase() function
+	'testcase_append_function'  => '',
+	# help fixup any issues with your testcases by gsubbing the key with the value (handy if you previously miss-logged something)
+	'testcase_fixups'           => {},
+	# include the following inside the testcases <head>...</head>
+	'testcase_head'             => '',
+	# include the following inside the testcases <body>...</body>
+	'testcase_body'             => ''
+}

@@ -15,6 +15,9 @@ module Grinder
 	
 		class WebStats
 			
+			JOB_FUZZING            = 'fuzzing'
+			JOB_REDUCTION          = 'reduction'
+			
 			VERIFIED_UNKNOWN       = 0
 			VERIFIED_INTERESTING   = 1
 			VERIFIED_UNINTERESTING = 2
@@ -29,43 +32,74 @@ module Grinder
 				@https    = https
 			end
 			
-			def update_node_fuzz_status( testcases_per_minute )
+			def update_job_status( testcases_per_minute, job )
 				
 				params = {
 					'key'     => @key,
-					'action'  => 'update_node_fuzz_status',
+					'action'  => 'update_job_status',
 					'version' => "#{$version_major}.#{$version_minor}",
 					'time'    => ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ),
 					'node'    => @node,
-					'tcpm'    => testcases_per_minute
+					'tcpm'    => testcases_per_minute,
+					'job'     => job
 				}
 
-				return _send_request( params )
+				return _send_request1( params )
 			end
 			
 			def add_crash( time, browser, hash, type, fuzzer, crash_data, log_data, verified=VERIFIED_UNKNOWN )
 			
 				params = {
-					'key'        => @key,
-					'action'     => 'add_crash',
-					'time'       => time,
-					'node'       => @node,
-					'browser'    => browser,
-					'hash_quick' => hash[0],
-					'hash_full'  => hash[1],
-					'type'       => type,
-					'fuzzer'     => fuzzer,
-					'crash_data' => ::Base64.encode64( crash_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
-					'log_data'   => ::Base64.encode64( log_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
-					'verified'   => verified
+					'key'           => @key,
+					'action'        => 'add_crash',
+					'time'          => time,
+					'node'          => @node,
+					'browser'       => browser,
+					'hash_quick'    => hash[0],
+					'hash_full'     => hash[1],
+					'type'          => type,
+					'fuzzer'        => fuzzer,
+					'crash_data'    => ::Base64.encode64( crash_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
+					'log_data'      => ::Base64.encode64( log_data ).tr( '+/=', '-_,' ).gsub( "\n", '' ),
+					'verified'      => verified
 				}
 
-				return _send_request( params )
+				return _send_request1( params )
+			end
+			
+			def duplicate_crash( hash )
+			
+				params = {
+					'key'    => @key,
+					'action' => 'duplicate_crash',
+					'hash'   => hash
+				}
+				
+				response = _send_request2( params )
+				
+				if( response.code.to_i == 200 )
+					if( response['duplicate'] and ( response['duplicate'] =~ /1|yes|true/i ) )
+						return true
+					end
+				end
+				
+				return false
 			end
 			
 			protected
 			
-			def _send_request( params )
+			def _send_request1( params )
+			
+				response = _send_request2( params )
+			
+				if( response.code.to_i == 200 )
+					return true
+				end
+				
+				return false
+			end
+			
+			def _send_request2( params )
 			
 				uri = ::URI.parse( "#{ @https ? 'https' : 'http' }://#{@baseurl}" )
 				
@@ -87,11 +121,8 @@ module Grinder
 				
 				response = http.request( request )
 
-				if( response.code.to_i == 200 )
-					return true
-				end
-				
-				return false
+				return response
+
 			end
 			
 		end
@@ -130,6 +161,8 @@ if( $0 == __FILE__ )
 	web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
 
 	success = web.add_crash( ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" ), $grinder_node, ['ABABABAB','12121212'], 'Testing', 'TestFuzzer', crash_data, log_data, 1 )
+	
+	#success = web.duplicate_crash( 'ABABABAB.12121212' )
 	
 	$stdout.puts success
 	

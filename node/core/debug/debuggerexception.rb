@@ -19,9 +19,9 @@ module Grinder
 		
 			class DebuggerException < ::Exception
 
-				attr_reader :pid
+				attr_reader :pid, :hash
 				
-				def initialize( browser, dst_dir, type, pid, data, hash )
+				def initialize( browser, dst_dir, type, pid, data, hash, verified=nil )
 					super()
 					@browser  = browser
 					@dst_dir  = dst_dir
@@ -30,33 +30,111 @@ module Grinder
 					@data     = data
 					@hash     = hash
 					@time     = ::Time.new.strftime( "%Y-%m-%d %H:%M:%S" )
+					@verified = verified ? verified : Grinder::Core::WebStats::VERIFIED_UNKNOWN
 				end
 
-				def log( crash_data, log_data, verbose=false )
-					
+				def set_testcase_crash
+					success = true
+					begin
+						uri      = ::URI.parse( "http://#{$server_address}:#{$server_port}/testcase_crash" )
+						http     = Net::HTTP.new( uri.host, uri.port )
+						request  = Net::HTTP::Post.new( uri.request_uri )
+
+						request.set_form_data( { 'hash' => "#{@hash[0]}.#{@hash[1]}", 'type' => @type } )
+
+						response = http.request( request )
+
+						if( response.code.to_i != 200 )
+							success = false
+						end
+					rescue
+						success = false
+					end
+					return success
+				end
+				
+				def duplicate?
+					begin
+						uri      = ::URI.parse( "http://#{$server_address}:#{$server_port}/duplicate_crash" )
+						http     = Net::HTTP.new( uri.host, uri.port )
+						request  = Net::HTTP::Post.new( uri.request_uri )
+						
+						request.set_form_data( { 'hash' => "#{@hash[0]}.#{@hash[1]}" } )
+						
+						response = http.request( request )
+
+						if( response.code.to_i == 200 and response['duplicate'] == 'true' )
+							return true
+						end
+						
+						if( $webstats_baseurl and $webstats_key )
+							web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
+								
+							if( web.duplicate_crash( "#{@hash[0]}.#{@hash[1]}" ) )
+								return true
+							end
+						end
+
+					rescue
+					end
+					return false
+				end
+				
+				#def get_previous_crash
+				#	result = ''
+				#	begin
+				#		uri      = ::URI.parse( "http://#{$server_address}:#{$server_port}/previous_crash" )
+				#		http     = Net::HTTP.new( uri.host, uri.port )
+				#		request  = Net::HTTP::Post.new( uri.request_uri )
+				#		
+				#		request.set_form_data( { 'hash' => "#{@hash[0]}.#{@hash[1]}" } )
+				#		
+				#		response = http.request( request )
+				#
+				#		if( response.code.to_i == 200 )
+				#			result = response['hash']
+				#		end
+				#	rescue
+				#		result = ''
+				#	end
+				#	return result
+				#end
+				
+				def get_current_fuzzer
+					fuzzer = nil
+					begin
+						uri      = ::URI.parse( "http://#{$server_address}:#{$server_port}/current_fuzzer" )
+						http     = Net::HTTP.new( uri.host, uri.port )
+						request  = Net::HTTP::Post.new( uri.request_uri )
+						
+						response = http.request( request )
+
+						if( response.code.to_i == 200 )
+							fuzzer = response['fuzzer']
+						end
+					rescue
+						fuzzer = nil
+					end
+					return fuzzer
+				end
+				
+				def log( crash_data, log_data )
+
 					print_alert( "" )
 					print_alert( "Caught a #{@type} in #{@browser} process #{@pid} at #{@time} with a crash hash of #{@hash[0]}.#{@hash[1]}" )
 
 					if( $webstats_baseurl and $webstats_key )
 						begin
-							fuzzer = 'Unknown'
 							# Issue a request to the Grinder server to get its current fuzzer...
-							begin
-								uri      = ::URI.parse( "http://#{$server_address}:#{$server_port}/current_fuzzer" )
-								http     = Net::HTTP.new( uri.host, uri.port )
-								request  = Net::HTTP::Get.new( uri.request_uri )
-								response = http.request( request )
-
-								if( response.code.to_i == 200 )
-									fuzzer = response['fuzzer']
-								end
-							rescue ::Exception => e
+							fuzzer = get_current_fuzzer
+							if( not fuzzer )
 								print_error( "Getting the Grinder servers current fuzzer failed: '#{e.message}'" )
+								fuzzer = 'Unknown'
 							end
 							
 							# log this crash to the grinder web server...
 							web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
-							success = web.add_crash( @time, @browser, @hash, @type, fuzzer, crash_data ? crash_data : '', log_data ? log_data : '' )
+							success = web.add_crash( @time, @browser, @hash, @type, fuzzer, crash_data ? crash_data : '', log_data ? log_data : '', @verified )
 							if( success )
 								print_alert( "Posted crash to '#{$webstats_baseurl}'" )
 							else
@@ -68,13 +146,6 @@ module Grinder
 					end
 					
 					print_alert( "" )
-					
-					if( verbose )
-						@data.each_line do | line |
-							print_alert( line )
-						end
-						print_alert( "" )
-					end
 				end
 				
 				def save_crash()

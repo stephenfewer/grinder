@@ -14,6 +14,25 @@ module Grinder
 
 		class Crypt
 		
+			def Crypt.encrypted?( file, split_char=';' )
+				begin
+					::File.open( file, 'r' ) do | f |
+					
+						data  = f.read( f.stat.size )
+						
+						parts = data.split( split_char )
+
+						if( not parts or parts.length != 6 or parts[0].to_i != parts[3].length or parts[1].to_i != parts[4].length or parts[2].to_i != parts[5].length )
+							return false
+						end
+						
+						return true
+					end
+				rescue
+				end
+				return false
+			end
+			
 			def Crypt.encrypt( rsa_key, data, split_char=';', cipher_algorithm='aes-256-cbc' )
 				
 				if( not rsa_key.public? )

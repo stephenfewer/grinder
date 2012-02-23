@@ -11,10 +11,10 @@ $version_dev   = true
 $print_owner   = ''
 $verbose       = true
 
-def print_init( owner, verbose=true )
+def print_init( owner, verbose=true, printbanner=true )
 	$verbose     = verbose
 	$print_owner = owner[0]
-	if( $verbose )
+	if( $verbose and printbanner )
 		ver = "#{owner} - Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }"
 		
 		print_simple( '' )

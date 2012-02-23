@@ -13,6 +13,10 @@ module Grinder
 	
 		class InternetExplorer < Grinder::Core::Debugger
 			
+			def self.target_exe
+				return $internetexplorer_exe
+			end
+			
 			def loaders( pid, path, addr )
 				if( path.include?( 'jscript9' ) )
 					@browser = "IE9"
@@ -163,17 +167,6 @@ end
 
 if( $0 == __FILE__ )
 
-	ARGV.each do | arg |
-		if( arg.include?( '--config=' ) )
-			config_file = arg[9,arg.length]
-			
-			if( not config_init( config_file ) )
-				print_error( "Failed to load the config file '#{config_file}'." )
-				::Kernel::exit( false )
-			end			
-		end
-	end
-	
-	Grinder::Core::Debugger.main( $internetexplorer_exe, Grinder::Browser::InternetExplorer )
+	Grinder::Core::Debugger.main( Grinder::Browser::InternetExplorer, ARGV )
 
 end

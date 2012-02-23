@@ -18,7 +18,7 @@
 	{
 		$success = false;
 		
-		$sql = "SELECT * FROM nodes WHERE name='" . $node . "';";
+		$sql = "SELECT crashes FROM nodes WHERE name='" . $node . "';";
 		$result = mysql_query( $sql );
 		if( $result )
 		{
@@ -57,7 +57,7 @@
 		return $success;
 	}
 	
-	function update_node_fuzz_status( $node, $version, $time, $testcases_per_minute )
+	function update_job_status( $node, $version, $time, $testcases_per_minute, $job )
 	{
 		$success = false;
 		
@@ -98,6 +98,24 @@
 		$message = "A crash has triggered an alert for a '" . htmlentities( $field, ENT_QUOTES ) . "' equal to '" . htmlentities( $value, ENT_QUOTES ) . "'.\n\n";
 
 		return mail( $email, "Grinder: Alert!", $message ); 
+	}
+	
+	function duplicate_crash( $hash )
+	{
+		$duplicate = false;
+		$sql       = "SELECT SUM(count) FROM crashes WHERE hash='" . $hash . "' LIMIT 1;";
+		$result    = mysql_query( $sql );
+		if( $result )
+		{	
+			if( mysql_num_rows( $result ) > 0 )
+			{
+				$row = mysql_fetch_array( $result );
+				if( isset( $row['SUM(count)'] ) and intval( $row['SUM(count)'] ) > 0 )
+					$duplicate = true;
+			}
+			mysql_free_result( $result );
+		}
+		return $duplicate;
 	}
 	
 	function add_crash( $time, $node, $target, $hash_quick, $hash_full, $type, $fuzzer, $log_data, $crash_data, $verified )
@@ -234,6 +252,22 @@
 
 			switch( $action )
 			{
+				case 'duplicate_crash':
+					if( isset($_POST['hash']) )
+					{
+						$hash = mysql_real_escape_string( trim( $_POST['hash'] ) );
+
+						if( empty( $hash ) or strlen( $hash ) != 17 )
+							exit;
+							
+						$success = duplicate_crash( $hash );
+						if( $success )
+							header( "duplicate: true" );
+						else
+							header( "duplicate: false" );
+					}
+					break;
+				case 'update_job_status':
 				case 'update_node_fuzz_status':
 					if( isset($_POST['time']) && isset($_POST['node']) && isset($_POST['tcpm']) )
 					{
@@ -245,10 +279,14 @@
 						if( isset($_POST['version']) )
 							$version = mysql_real_escape_string( trim( $_POST['version'] ) ); // v0.2 addition
 
-						if( empty( $time ) or empty( $node ) or empty( $version ) )
+						$job = 'fuzzing';
+						if( isset($_POST['job']) )
+							$job = mysql_real_escape_string( trim( $_POST['job'] ) ); // v0.3 addition
+							
+						if( empty( $time ) or empty( $node ) or empty( $version ) or empty( $job ) )
 							exit;
 							
-						$success = update_node_fuzz_status( $node, $version, $time, $testcases_per_minute );
+						$success = update_job_status( $node, $version, $time, $testcases_per_minute, $job );
 					}
 					break;
 				case 'add_crash':

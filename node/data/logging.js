@@ -20,6 +20,18 @@ function rand_item( arr )
 	return arr[ rand( arr.length ) ];
 }
 
+function tickle( obj )
+{
+	try
+	{
+		for( var p in obj )
+		{
+			try { var tmp = typeof obj[p]; } catch( e2 ){}
+		}
+	}
+	catch( e1 ){}
+}
+
 function LOGGER( name )
 {
 	this.name    = name;
@@ -61,13 +73,19 @@ function LOGGER( name )
 		unique_types[type] += 1;
 
 		return result;
-	}
+	};
 	
 	if( this.browser == 'CM' || this.browser == 'FF' || this.browser == 'SF' )
 	{
 		this.log = function( message, location, count )
 		{
 			idx += 1;
+
+			message = message.replace( /</g, "&lt;" );
+			message = message.replace( />/g, "&gt;" );
+			message = message.replace( /&/g, "&amp;" );
+			message = message.replace( /\"/g, "&quot;" );
+			message = message.replace( /\'/g, "&apos;" );
 
 			log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
 			log_xml += '<idx>' + idx + '</idx>';
@@ -91,7 +109,13 @@ function LOGGER( name )
 		this.log = function( message, location, count )
 		{
 			idx += 1;
-
+			
+			message = message.replace( /</g, "&lt;" );
+			message = message.replace( />/g, "&gt;" );
+			message = message.replace( /&/g, "&amp;" );
+			message = message.replace( /\"/g, "&quot;" );
+			message = message.replace( /\'/g, "&apos;" );
+			
 			log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
 			log_xml += '<idx>' + idx + '</idx>';
 			log_xml += '<location>' + location + '</location>';

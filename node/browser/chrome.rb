@@ -12,7 +12,11 @@ module Grinder
 	module Browser
 	
 		class Chrome < Grinder::Core::Debugger
-		
+			
+			def self.target_exe
+				return $chrome_exe
+			end
+			
 			def extra_param
 				return '--no-sandbox'
 			end
@@ -106,17 +110,6 @@ end
 
 if( $0 == __FILE__ )
 
-	ARGV.each do | arg |
-		if( arg.include?( '--config=' ) )
-			config_file = arg[9,arg.length]
-			
-			if( not config_init( config_file ) )
-				print_error( "Failed to load the config file '#{config_file}'." )
-				::Kernel::exit( false )
-			end	
-		end
-	end
-	
-	Grinder::Core::Debugger.main( $chrome_exe, Grinder::Browser::Chrome )
+	Grinder::Core::Debugger.main( Grinder::Browser::Chrome, ARGV )
 
 end

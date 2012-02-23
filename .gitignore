@@ -2,6 +2,7 @@ node/source/continue/Release/
 node/source/continue/Debug/
 node/source/continue/ipch/
 node/source/continue/ContinueScript.vcproj.*.user
+node/source/continue/ContinueScript.vcxproj.user
 node/source/continue/*.ncb
 node/source/continue/*.sdf
 node/source/continue/*.suo
@@ -9,6 +10,7 @@ node/source/logger/Release/
 node/source/logger/Debug/
 node/source/logger/ipch/
 node/source/logger/logger.vcproj.*.user
+node/source/logger/logger.vcxproj.user
 node/source/logger/*.ncb
 node/source/logger/*.sdf
 node/source/logger/*.suo

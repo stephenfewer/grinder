@@ -60,7 +60,7 @@ __declspec(dllexport) VOID LOGGER_finishedTest( wchar_t * cpMessageW )
 
 __declspec(dllexport) VOID LOGGER_logMessage( wchar_t * cpMessageW )
 {
-	char cMessageA[4096];
+	char cMessageA[8192];
 	int lenW;
 	int lenA;
 
@@ -73,7 +73,7 @@ __declspec(dllexport) VOID LOGGER_logMessage( wchar_t * cpMessageW )
 
 		lenA = WideCharToMultiByte( CP_ACP, 0, cpMessageW, lenW, 0, 0, NULL, NULL );
 
-		if( lenA > 4096 )
+		if( lenA > 8192 )
 			break;
 
 		WideCharToMultiByte( CP_ACP, 0, cpMessageW, lenW, (LPSTR)&cMessageA, lenA, NULL, NULL);

@@ -32,6 +32,11 @@ BOOL CALLBACK enumproc( HWND hWnd, LPARAM lParam )
 			SendMessage( hWnd, BM_CLICK, 0 , 0 );
 			return FALSE;
 		}
+		else if( strcmp( cString, "Quit Firefox" ) == 0 )
+		{
+			SendMessage( hWnd, BM_CLICK, 0 , 0 );
+			return FALSE;
+		}
 
 	} while(0);
 
@@ -103,6 +108,17 @@ void main( void )
 			// cant find the 'Leave Page' button.
 		}
 
+		hWindow = FindWindow( NULL, "Google Chrome" );
+		if( hWindow )
+		{
+			EnumChildWindows( hWindow, enumproc, 0 );
+		}
+
+		hWindow = FindWindow( NULL, "Mozilla Crash Reporter" );
+		if( hWindow )
+		{
+			EnumChildWindows( hWindow, enumproc, 0 );
+		}
 		Sleep( 250 );
 	}
 }

@@ -416,24 +416,15 @@ module Grinder
 					rescue Grinder::Core::Debug::DebuggerException => e
 						# stop debugging this process!
 						Metasm::WinAPI.debugactiveprocessstop( e.pid )
-						# log the crash to the console and optionally to the web
-						#if( @reduction )
-							#print_alert( "Got a crash '#{e.hash}' during reduction." )
-							# check a list of previous crashes (passed on the commandline? or via testcase server request?) to see if we have a duplicate (different from the grinder server having dups which is fine)
-							# we want to avoid generating 100s of reduction all generating the same crash, we are only interested in reduction generating new crashes (even if they are dups so long as they are unique to this reduction)
-							#if( e.duplicate? )
-							# if crash is unique to this reduction, we want to log it to remote server and save local (encrypted) log/crash files. 
-							# we must tell reduction.rb the last testcase generated a crash
-							
-							# we also need to know if a new crash from a reduction came from a different crash, so we can update teh crashes 'parent' on the grinder server
-						#else
-						
+
 						if( @reduction )
 							e.set_testcase_crash
 						end
 						
 						#if( not @reduction or ( @reduction and not e.duplicate? ) )
 						if( not @reduction )
+							# log the crash to the console and optionally to the web
+							
 							crash_data = e.save_crash()
 							log_data   = e.save_log( logger_file( e.pid ) )
 							

@@ -53,6 +53,8 @@ Grinder Screenshots
 
 ![Grinder Node Screenshot](https://github.com/stephenfewer/grinder/raw/master/screenshot_node.png "Grinder Node Screenshot")
 
+![Grinder Crash Screenshot](https://github.com/stephenfewer/grinder/raw/master/screenshot_crash.png "Grinder Crash Screenshot")
+
 Fuzzers
 =======
 
@@ -116,11 +118,15 @@ To decrypt an encrypted crash/log file you can then use the following command:
 Generating a Testcase From a Log File
 =====================================
 
-When you have generated a crash and downloaded the log/crash files (and decrypted them if required) you can use the testcase.rb utility to transform the .log file into a html file that will (hopefully) reproduce the crash.
+When you have generated a crash and downloaded the log/crash files you can use the testcase.rb utility to transform the .log file into a html file that will (hopefully) reproduce the crash.
 
-> .\grinder\node\>ruby testcase.rb c:\path\to\XXXXXXXX.XXXXXXXX.log > c:\path\to\XXXXXXXX.XXXXXXXX.html
+> .\grinder\node\>ruby testcase.rb [--config=c:\path\to\CONFIG.RB] --log=c:\path\to\XXXXXXXX.XXXXXXXX.log --save=c:\path\to\XXXXXXXX.XXXXXXXX.html
 
-Depending on how you write your fuzzers you will probably need to modify testcase.rb to suit.
+If the log file has been automatically encrypted, you can pass in a private key (and optional keypass) to testcase.rb in order to decrypt the log file on the fly:
+
+> .\grinder\node\>ruby testcase.rb [--config=c:\path\to\CONFIG.RB] --log=c:\path\to\XXXXXXXX.XXXXXXXX.log --save=c:\path\to\XXXXXXXX.XXXXXXXX.html --key=c:\path\to\PRIVATE.PEM --keypass=PASSPHRASE
+
+Depending on how you write your fuzzers you may need to modify testcase.rb to suit or edit the testcase options ($testcase_opts) in your config file.
 
 If the testcase does not reproduce the crash it is usefull to create an 'Alert' within the Grinder Server to alert you by email whenever the same crash is encountered again. Using a different log file for the same crash may help reproduce it.
 

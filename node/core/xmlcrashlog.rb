@@ -42,7 +42,15 @@ class XmlCrashLog
 			
 			data = data.gsub( "\n", '' )
 
-			data = "<?xml version='1.0'?><logs>" + data + "</logs>"
+			if( not data.start_with?( '<fuzzer' ) )
+				data = '<fuzzer name="" browser="">' + data
+			end
+			
+			if( not data.end_with?( '</fuzzer>' ) )
+				data = data + '</fuzzer>'
+			end
+			
+			data = "<?xml version='1.0'?>" + data
 			
 			document = ::REXML::Document.new( data )
 			
@@ -55,10 +63,15 @@ class XmlCrashLog
 		return false if not data or not document
 
 		document.elements.each do | root |
-			next if( root.name.downcase != 'logs' )
+		
+			next if( root.name.downcase != 'fuzzer' )
+			
 			root.each do | element1 |
+			
 				next if( element1.name.downcase != 'log' )
+				
 				log = ::Hash.new
+				
 				element1.each do | element2 |
 					if( element2.name == 'idx' or element2.name == 'count' )
 						log[element2.name] = element2.text.to_i
@@ -77,6 +90,7 @@ class XmlCrashLog
 						log[element2.name] = element2.text
 					end
 				end
+				
 				@log_lines << log
 			end
 		end

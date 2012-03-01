@@ -58,11 +58,6 @@ function LOGGER( name )
 	
 	this.browser = this.get_browser();
 	
-	this.starting = function()
-	{
-		parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + this.name + '" browser="' + this.browser + '">' );
-	};
-	
 	this.unique_id = function( type )
 	{
 		if( typeof unique_types[type] == 'undefined' )
@@ -75,59 +70,99 @@ function LOGGER( name )
 		return result;
 	};
 	
+	this.log = function( message, location, count )
+	{
+		var last_idx = -1;
+		
+		if( typeof location != 'string' )
+			location = '';
+		
+		if( typeof count != 'number' )
+			count = 1;
+			
+		if( typeof message == 'string' )
+		{
+			last_idx = log_message( message, location, count );
+		}
+		else
+		{
+			if( typeof message.length != 'undefined' && message.length > 0 )
+			{
+				idx += 1;
+				
+				xml  = '<log>';
+				xml += '<idx>' + idx + '</idx>';
+				xml += '<location>' + xml_escape( location ) + '</location>';
+				xml += '<count>' + count + '</count>';
+
+				log_xml( xml );
+			
+				for( var m in message )
+					last_idx = this.log( message[m], location, 1 );
+
+				log_xml( '</log>' );
+			}
+		}
+		
+		return last_idx;
+	};
+	
+	xml_escape = function( message )
+	{
+		message = message.replace( /</g, "&lt;" );
+		message = message.replace( />/g, "&gt;" );
+		message = message.replace( /&/g, "&amp;" );
+		message = message.replace( /\"/g, "&quot;" );
+		message = message.replace( /\'/g, "&apos;" );
+		
+		return message;
+	};
+	
+	log_message = function( message, location, count )
+	{
+		idx += 1;
+		
+		xml  = '<log>';
+		xml += '<idx>' + idx + '</idx>';
+		xml += '<location>' + xml_escape( location ) + '</location>';
+		xml += '<message>' + xml_escape( message ) + '</message>';
+		xml += '<count>' + count + '</count>';
+		xml += '</log>';
+
+		log_xml( xml );
+		
+		return idx - 1;
+	};
+	
 	if( this.browser == 'CM' || this.browser == 'FF' || this.browser == 'SF' )
 	{
-		this.log = function( message, location, count )
+		log_xml = function( xml )
 		{
-			idx += 1;
-
-			message = message.replace( /</g, "&lt;" );
-			message = message.replace( />/g, "&gt;" );
-			message = message.replace( /&/g, "&amp;" );
-			message = message.replace( /\"/g, "&quot;" );
-			message = message.replace( /\'/g, "&apos;" );
-
-			log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
-			log_xml += '<idx>' + idx + '</idx>';
-			log_xml += '<location>' + location + '</location>';
-			log_xml += '<message>' + message + '</message>';
-			log_xml += '<count>' + count + '</count>';
-			log_xml += '</log>';
-
-			parseFloat( unescape( '%uC0DE%uDEAD'+log_xml+'%u0000' ) );
-			
-			return idx - 1;
+			parseFloat( unescape( '%uC0DE%uDEAD' + xml + '%u0000' ) );
 		};
 
+		this.starting = function()
+		{
+			parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + xml_escape( this.name ) + '" browser="' + xml_escape( this.browser ) + '">' + '%u0000' );
+		};
+		
 		this.finished = function()
 		{
-			parseFloat( unescape( '%uF00D%uDEAD' + '</fuzzer>' + '%u0000' )  );
+			parseFloat( unescape( '%uF00D%uDEAD' + '</fuzzer>' + '%u0000' ) );
 		};
 	}
 	else
 	{
-		this.log = function( message, location, count )
+		log_xml = function( xml )
 		{
-			idx += 1;
-			
-			message = message.replace( /</g, "&lt;" );
-			message = message.replace( />/g, "&gt;" );
-			message = message.replace( /&/g, "&amp;" );
-			message = message.replace( /\"/g, "&quot;" );
-			message = message.replace( /\'/g, "&apos;" );
-			
-			log_xml  = '<log name="' + this.name + '" browser="' + this.browser + '">';
-			log_xml += '<idx>' + idx + '</idx>';
-			log_xml += '<location>' + location + '</location>';
-			log_xml += '<message>' + message + '</message>';
-			log_xml += '<count>' + count + '</count>';
-			log_xml += '</log>';
-
-			parseFloat( unescape( '%uC0DE%uDEAD') + log_xml );
-			
-			return idx - 1;
+			parseFloat( unescape( '%uC0DE%uDEAD') + xml );
 		};
-
+		
+		this.starting = function()
+		{
+			parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + xml_escape( name ) + '" browser="' + xml_escape( this.browser ) + '">' );
+		};
+		
 		this.finished = function()
 		{
 			parseFloat( unescape( '%uF00D%uDEAD') + '</fuzzer>' );
@@ -144,10 +179,9 @@ function LOGGER( name )
 			{
 				if( typeof obj.id != 'undefined' )
 					return obj.id;
-				id = obj.id;
 			} catch(e){}
 	
-			obj_hint = "%" + name + "," + id + "%";
+			obj_hint = "%" + name + "%";
 		}
 
 		return obj_hint;

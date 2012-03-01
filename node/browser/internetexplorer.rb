@@ -19,7 +19,25 @@ module Grinder
 			
 			def loaders( pid, path, addr )
 				if( path.include?( 'jscript9' ) )
+				
 					@browser = "IE9"
+					
+					# IE10 (Windows 8 Consumer Preview) uses the module jscript9.dll but we
+					# exhamine the version number to determine if its actually IE10 or IE9.
+					begin
+						pe = Metasm::PE.decode_file_header( path )
+							
+						version = pe.decode_version
+						
+						if( version['FileVersion'] )
+							result = version['FileVersion'].scan( /(\d*)/ )
+							if( not result.empty? )
+								@browser = "IE" + result.first.first
+							end
+						end
+					rescue
+					end
+
 					if( not @attached[pid].jscript_loaded )
 						@attached[pid].jscript_loaded = loader_javascript_ie9( pid, addr )
 					end

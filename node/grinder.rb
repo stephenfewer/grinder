@@ -8,6 +8,7 @@ $:.unshift( '.' )
 
 require 'core/configuration'
 require 'core/logging'
+require 'digest/sha2'
 
 class Grinder
 	
@@ -98,6 +99,19 @@ class Grinder
 			end
 		end
 		
+		::File.open( '.\\data\\grinder_logger.dll', 'rb' ) do | dll_src |
+			::File.open( grinder_logger, 'rb' ) do | dll_dst |
+				
+				gl1 = dll_src.read( dll_src.stat.size )
+				
+				gl2 = dll_dst.read( dll_dst.stat.size )
+
+				if( ::Digest::SHA256.digest( gl1 ) != ::Digest::SHA256.digest( gl2 ) )
+					print_warning( "Warning, the grinder logger DLL '#{grinder_logger}' does not match the one from the \\grinder\\node\\data\\ directory. Please make sure you are using the latest one." )
+				end
+			end
+		end
+
 		return true
 	end
 

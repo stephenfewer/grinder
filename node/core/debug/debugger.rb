@@ -335,7 +335,20 @@ module Grinder
 						asm  = prog.cpu.decode_instruction( Metasm::EncodedData.new(data), offset )
 						if( asm )
 							assembly = asm.instruction.to_s.upcase
+							
+							# If its a CALL instruction, try to resolve the callee to a symbol name
+							if( asm.opcode.name.downcase == 'call' )
+								calladdr = asm.instruction.args[0].rexpr
+								if( calladdr )
+									callsym = @attached[pid].address2symbol( calladdr, mods )
+									if( not callsym.empty? )
+										assembly = "CALL #{callsym}"
+									end
+								end
+							end
+							
 							log_data << "    0x#{'%08X' % (offset)} - #{assembly}\n"
+							
 							offset += asm.bin_length
 						else
 							log_data << to_hex_dump( data, offset )

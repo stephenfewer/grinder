@@ -337,7 +337,7 @@ module Grinder
 							assembly = asm.instruction.to_s.upcase
 							
 							# If its a CALL instruction, try to resolve the callee to a symbol name
-							if( asm.opcode.name.downcase == 'call' )
+							if( asm.opcode.name.downcase == 'call' and asm.instruction.args[0] and asm.instruction.args[0].respond_to?( :rexpr ) )
 								calladdr = asm.instruction.args[0].rexpr
 								if( calladdr )
 									callsym = @attached[pid].address2symbol( calladdr, mods )

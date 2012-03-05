@@ -22,12 +22,13 @@ module Grinder
 				
 				def initialize( crashes_dir, target_exe, reduction, target_url, logdir=nil  )
 					super( target_exe + ( extra_param ? ' ' + extra_param : '' ) + ' ' + target_url, true )
-					@browser     = ''
-					@crashes_dir = crashes_dir
-					@reduction   = reduction
-					@logger      = 'grinder_logger.dll'
-					@logdir      = logdir ? logdir : ENV['TEMP']
-					@attached    = ::Hash.new
+					@browser      = ''
+					@crashes_dir  = crashes_dir
+					@reduction    = reduction
+					@logger       = 'grinder_logger.dll'
+					@logdir       = logdir ? logdir : ENV['TEMP']
+					@attached     = ::Hash.new
+					@debugstrings = ::Hash.new
 					Grinder::Core::Debug::ProcessSymbols.init( extra_symbol_server() )
 					print_status( "Running '#{target_exe}'" )
 				end
@@ -152,7 +153,16 @@ module Grinder
 					debugstring = @mem[pid][info.ptr, info.length]
 					debugstring = debugstring.unpack('S*').pack('C*') if info.unicode != 0
 					debugstring = debugstring[0, debugstring.index(?\0)] if debugstring.index(?\0)
-					print_status( "Debug message from process #{pid}: #{debugstring}" )
+					if( debugstring.ascii_only? and not debugstring.empty? )
+					
+						if( not @debugstrings.has_key?( pid ) )
+							@debugstrings[pid] = [];
+						end
+						
+						@debugstrings[pid] << debugstring
+						
+						print_status( "Debug message from process #{pid}: #{debugstring}" )
+					end
 					Metasm::WinAPI::DBG_CONTINUE
 				end
 				
@@ -329,20 +339,20 @@ module Grinder
 
 					offset = ctx[:eip]
 					prog = Metasm::ExeFormat.new( Metasm::Ia32.new )
-					log_data << "Code:\n"
+					log_data << "\nCode:\n"
 					0.upto( 7 ) do
 						data = @mem[pid][offset,16]
 						asm  = prog.cpu.decode_instruction( Metasm::EncodedData.new(data), offset )
 						if( asm )
-							assembly = asm.instruction.to_s.upcase
+							assembly = asm.instruction.to_s.downcase
 							
 							# If its a CALL instruction, try to resolve the callee to a symbol name
-							if( asm.opcode.name.downcase == 'call' and asm.instruction.args[0] and asm.instruction.args[0].respond_to?( :rexpr ) )
+							if( asm.opcode.name == 'call' and asm.instruction.args[0] and asm.instruction.args[0].respond_to?( :rexpr ) )
 								calladdr = asm.instruction.args[0].rexpr
 								if( calladdr )
 									callsym = @attached[pid].address2symbol( calladdr, mods )
 									if( not callsym.empty? )
-										assembly = "CALL #{callsym}"
+										assembly = "call #{callsym}"
 									end
 								end
 							end
@@ -358,7 +368,7 @@ module Grinder
 					
 					data = @mem[pid][ctx[:esp],128]
 					if( data )
-						log_data << "Stack:\n" << to_hex_dump( data, ctx[:esp] )
+						log_data << "\nStack:\n" << to_hex_dump( data, ctx[:esp] )
 					end
 					
 					quick_count = 0
@@ -393,6 +403,16 @@ module Grinder
 						end
 					end
 
+					if( @debugstrings.has_key?( pid ) )
+						log_data << "\nDebug Strings:\n"
+						
+						@debugstrings[pid].each do | debugstring |
+							log_data << "    * #{debugstring.chomp}\n"
+						end
+						
+						log_data << "\n"
+					end
+					
 					log_data << "Modules:\n"
 					mods.each do | mod |
 						
@@ -432,10 +452,7 @@ module Grinder
 
 						if( @reduction )
 							e.set_testcase_crash
-						end
-						
-						#if( not @reduction or ( @reduction and not e.duplicate? ) )
-						if( not @reduction )
+						else
 							# log the crash to the console and optionally to the web
 							
 							crash_data = e.save_crash()

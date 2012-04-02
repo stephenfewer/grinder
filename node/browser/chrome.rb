@@ -57,7 +57,7 @@ module Grinder
 				
 				cpu        = Metasm::Ia32.new
 				
-				patch_size = 5
+				patch_size = 6
 				
 				backup     = @mem[pid][parsefloat,patch_size]
 				

@@ -1105,7 +1105,15 @@ EOS
 	def self.alloc_c_struct(structname, values={})
 		cp.alloc_c_struct(structname, values)
 	end
-
+	
+	def self.create_c_struct(structname, data, offset=0 )
+		cp.create_c_struct(structname, data, offset )
+	end
+	
+	def self.sizeof_c_struct(structname)
+		cp.sizeof_c_struct(structname)
+	end
+	
 	# return the binary version of a ruby value encoded as a C variable
 	# only integral types handled for now
 	def self.encode_c_value(var, val)

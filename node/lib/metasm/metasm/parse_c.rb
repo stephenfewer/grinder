@@ -2873,9 +2873,7 @@ EOH
 	class Parser
 		# TODO alloc_c_ptr to allocate a buffer of sizeof(arg) and return a ptr to it ( ReadFile(..., &lengthRead) )
 
-		# allocate a new AllocCStruct from the struct/struct typedef name of the current toplevel
-		# optionally populate the fields using the 'values' hash
-		def alloc_c_struct(structname, values=nil)
+		def get_struct( structname )
 			structname = structname.to_s if structname.kind_of?(::Symbol)
 			if structname.kind_of?(::String) and not struct = @toplevel.struct[structname]
 				struct = @toplevel.symbol[structname]
@@ -2885,11 +2883,26 @@ EOH
 				raise "unknown struct #{structname.inspect}" if not struct.kind_of? Union
 			end
 			struct = structname if structname.kind_of? Union
-			st = AllocCStruct.new(self, struct)
+			return struct
+		end
+		
+		# allocate a new AllocCStruct from the struct/struct typedef name of the current toplevel
+		# optionally populate the fields using the 'values' hash
+		def alloc_c_struct(structname, values=nil)
+			st = AllocCStruct.new(self, get_struct( structname ) )
 			values.each { |k, v| st[k] = v } if values
 			st
 		end
-
+		
+		def create_c_struct(structname, data, offset=0 )
+			return AllocCStruct.new(self, get_struct( structname ), data, offset)
+		end
+		
+		def sizeof_c_struct( structname )
+			st = AllocCStruct.new(self, get_struct( structname ) )
+			return st.length
+		end
+		
 		# convert (pack) a ruby value into a C buffer
 		# packs integers, converts Strings to their C pointer (using DynLdr)
 		def encode_c_value(type, val)

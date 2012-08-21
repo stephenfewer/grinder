@@ -9,6 +9,8 @@ require 'core/logging'
 require 'core/debug/processsymbols'
 require 'core/debug/hookedprocess'
 require 'core/debug/debuggerexception'
+require 'core/debug/logger'
+require 'core/debug/heaphook'
 
 module Grinder
 
@@ -19,17 +21,27 @@ module Grinder
 			class Debugger < Metasm::WinDbgAPI
 
 				STATUS_STACK_BUFFER_OVERRUN = 0xC0000409 # /GS Exception
+				STATUS_HEAP_CORRUPTION      = 0xC0000374 # /GS Exception
+				
+				include Grinder::Core::Debug::Logger
+				
+				include Grinder::Core::Debug::HeapHook
 				
 				def initialize( crashes_dir, target_exe, reduction, target_url, logdir=nil  )
+					
 					super( target_exe + ( extra_param ? ' ' + extra_param : '' ) + ' ' + target_url, true )
-					@browser      = ''
-					@crashes_dir  = crashes_dir
-					@reduction    = reduction
-					@logger       = 'grinder_logger.dll'
-					@logdir       = logdir ? logdir : ENV['TEMP']
-					@attached     = ::Hash.new
-					@debugstrings = ::Hash.new
+					
+					logger_initialize( logdir )
+					
+					heaphook_initialize()
+					
+					@browser     = ''
+					@crashes_dir = crashes_dir
+					@reduction   = reduction
+					@attached    = ::Hash.new
+					
 					Grinder::Core::Debug::ProcessSymbols.init( extra_symbol_server() )
+					
 					print_status( "Running '#{target_exe}'" )
 				end
 				
@@ -41,12 +53,54 @@ module Grinder
 					return nil
 				end
 				
-				def inject_logger_dll( pid, rdi=false )
+				def get_dll_export( pid, imagebase, name )
+					pe = Metasm::LoadedPE.load( @mem[pid][imagebase, 0x1000000] )
+					pe.decode_header
+					pe.decode_exports
+					if pe.export
+						pe.export.exports.each do |e|
+							next if not rva = pe.label_rva( e.target )
+							if( name == e.name )
+								return imagebase + rva
+							end
+						end
+					end
+					return nil
+				end
+
+				def jmp5( going_to, from_where )
+					Metasm::Shellcode.assemble( Metasm::Ia32.new, "jmp $#{going_to < from_where ? '-' : '+'}#{[going_to, from_where].max-[going_to, from_where].min}" ).encode_string
+				end
+				
+				def commandline( pid, info )
+					peb = @mem[pid][ info.threadlocalbase + 0x30, 4 ].unpack('V').first
+					return '' if not peb
+
+					processparams = @mem[pid][ peb + 0x10, 4 ].unpack('V').first
+					return '' if not processparams
+
+					len, max, buff = @mem[pid][ processparams + 0x40, 8 ].unpack('vvV')
+					return '' if not buff or len == 0
+					
+					return @mem[pid][ buff, len ].unpack('S*').pack('C*') 
+				end
+				
+				def handler_newprocess( pid, tid, info )
+					@attached[pid] = Grinder::Core::Debug::HookedProcess.new( pid, @hprocess[pid] )
+					
+					@attached[pid].commandline = commandline( pid, info )
+					
+					print_status( "Attached debugger to new process #{pid}" )
+
+					super( pid, tid, info )
+				end
+
+				def inject_dll( library_name, pid, rdi=false )
 					if( rdi )
 						# inject via Reflective DLL Injection...
 						# read in the loader dll file...
 						dll_data = ''
-						::File.open( ".\\data\\#{@logger}", 'rb' ) do | f |
+						::File.open( ".\\data\\#{library_name}", 'rb' ) do | f |
 							dll_data << f.read( f.stat.size )
 						end
 						# alloc some space in host process for the dll
@@ -80,89 +134,111 @@ module Grinder
 						return false if not loadlibrary_addr
 						# XXX: we could use WaitForInputIdle to ensure injection is safe but it deadlocks the ruby VM
 						#Metasm::WinAPI.waitforinputidle( @hprocess[pid], 10000 );	
-						dll_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, @logger.length, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_READWRITE )
+						dll_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, library_name.length, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_READWRITE )
 						return false if not dll_addr
-						@mem[pid][dll_addr, @logger.length] = @logger
+						@mem[pid][dll_addr, library_name.length] = library_name
 						hinject = Metasm::WinAPI.createremotethread( @hprocess[pid], 0, 0, loadlibrary_addr, dll_addr, 0, 0 )
 						return false if not hinject
 						# XXX: again we could use this to wait for the library to be loaded and get its base address, but it deadlocks the ruby VM :/
-						#Metasm::WinAPI.waitforsingleobject( hinject, -1 )
-						#dll_load_addr = 0
-						#Metasm::WinAPI.getexitcodethread( hinject, dll_load_addr )
-						#print_status( "Injected dll @ 0x#{'%08X' % (dll_load_addr)} into process '#{pid}'" )
+						#Metasm::WinAPI.waitforsingleobject( hinject, -1 )	
 					end
 					return true
 				end
 				
-				def get_dll_export( pid, imagebase, name )
-					pe = Metasm::LoadedPE.load( @mem[pid][imagebase, 0x1000000] )
-					pe.decode_header
-					pe.decode_exports
-					if pe.export
-						pe.export.exports.each do |e|
-							next if not rva = pe.label_rva( e.target )
-							if( name == e.name )
-								return imagebase + rva
+				def handler_newthread( pid, tid, info )
+					
+					if( $instrument_heap and use_heaphook?( pid ) and not @attached[pid].heaphook_injected )
+						@attached[pid].heaphook_injected = inject_dll( @heaphook_dll, pid )
+						return super( pid, tid, info )
+					end
+					
+					proc = Metasm::WinOS::Process.new( pid )
+	
+					# we must inject grinder_logger.dll before grinder_heaphook.dll
+					instrument_heap = $instrument_heap
+					if( not @reduction and not @attached[pid].logger_injected )
+						instrument_heap = false
+					end
+	
+					proc.modules.each do | mod |
+				
+						if( mod.path.downcase.include?( @heaphook_dll ) )
+							
+							if( instrument_heap and not @attached[pid].heaphook_loaded )
+								@attached[pid].heaphook_loaded = heaphook_loader( pid, mod.addr )
+							end
+							
+						elsif( mod.path.downcase.include?( 'vrfcore.dll' ) and not @attached[pid].appverifier )
+							
+							print_warning( "Please note, Application Verifier is enabled for process #{pid}" )
+							
+							@attached[pid].appverifier = true
+							
+						elsif( @attached[pid].heap_logmodule and not ( @configflags & CONFIG_PASSTHROUGH_STACK_WALK == CONFIG_PASSTHROUGH_STACK_WALK ) )
+						
+							@hhmodules.each_key do | hhmod |
+								if( not @hhmodules[hhmod] and mod.path.downcase.include?( hhmod.downcase ) )
+		
+									hhmod_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, hhmod.length, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_READWRITE )
+									
+									@mem[pid][hhmod_addr, hhmod.length] = hhmod
+
+									Metasm::WinAPI.createremotethread( @hprocess[pid], 0, 0, @attached[pid].heap_logmodule, hhmod_addr, 0, 0 )
+									
+									@hhmodules[hhmod] = true
+								end
+								
 							end
 						end
 					end
-					return nil
-				end
-
-				def jmp5( going_to, from_where )
-					Metasm::Shellcode.assemble( Metasm::Ia32.new, "jmp $#{going_to < from_where ? '-' : '+'}#{[going_to, from_where].max-[going_to, from_where].min}" ).encode_string
-				end
-					
-				def handler_newprocess( pid, tid, info )
-					@attached[pid] = Grinder::Core::Debug::HookedProcess.new( pid, @hprocess[pid] )
-					print_status( "Attached debugger to new process #{pid}" )
-					
-					super( pid, tid, info )
-				end
-
-				def handler_newthread( pid, tid, info )
+	
 					# if we are performing some form of testcase reduction we dont need to inject grinder_logger.dll
 					if( not @reduction )
-						if( @attached.has_key?( pid ) )
-							if( not @attached[pid].logger_injected )
-								@attached[pid].logger_injected = inject_logger_dll( pid )
-							end
-						end
+
+						if( use_logger?( pid ) )
 						
-						# Note: we dont rely on handler_loaddll() for dll load notification as we often dont recieve them all.
-						#if everything is loaded for this process we do not itterate through this.
-						if( not @attached[pid].all_loaded or not @attached[pid].logger_loaded )
-							proc = Metasm::WinOS::Process.new( pid )
-							proc.modules.each do | mod |
-								if( mod.path.include?( 'grinder_logger' ) )
-									if( not @attached[pid].logger_loaded )
-										@attached[pid].logger_loaded = loader_logger( pid, mod.addr )
+							#if( @attached.has_key?( pid ) )
+							if( not @attached[pid].logger_injected )
+								@attached[pid].logger_injected = inject_dll( @logger, pid )
+							end
+							#end
+							
+							# Note: we dont rely on handler_loaddll() for dll load notification as we often dont recieve them all.
+							# if everything is loaded for this process we do not itterate through this.
+							if( not @attached[pid].all_loaded or not @attached[pid].logger_loaded )
+								proc.modules.each do | mod |
+									if( mod.path.include?( @logger ) )
+										if( not @attached[pid].logger_loaded )
+											@attached[pid].logger_loaded = loader_logger( pid, mod.addr )
+										end
+									else 
+										loaders( pid, mod.path, mod.addr )
 									end
-								else 
-									loaders( pid, mod.path, mod.addr )
 								end
 							end
+							
 						end
+						
 					end
+					
 					super( pid, tid, info )
 				end
-				
 
 				def handler_debugstring( pid, tid, info )
 					#info.ptr = @mem[pid][info.ptr, 4].unpack('L').first
 					debugstring = @mem[pid][info.ptr, info.length]
+					
 					debugstring = debugstring.unpack('S*').pack('C*') if info.unicode != 0
-					debugstring = debugstring[0, debugstring.index(?\0)] if debugstring.index(?\0)
+					
+					debugstring = debugstring[0, debugstring.index( "\x00" )] if debugstring.index( "\x00" )
+					
 					if( debugstring.ascii_only? and not debugstring.empty? )
 					
-						if( not @debugstrings.has_key?( pid ) )
-							@debugstrings[pid] = [];
-						end
-						
-						@debugstrings[pid] << debugstring
+						@attached[pid].debugstrings << debugstring
 						
 						print_status( "Debug message from process #{pid}: #{debugstring}" )
 					end
+					
 					Metasm::WinAPI::DBG_CONTINUE
 				end
 				
@@ -202,6 +278,9 @@ module Grinder
 					elsif( info.code == STATUS_STACK_BUFFER_OVERRUN )
 						data, hash, verified = log( pid, tid )
 						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Stack Buffer Overrun', pid, data, hash, Grinder::Core::WebStats::VERIFIED_INTERESTING )
+					elsif( info.code == STATUS_HEAP_CORRUPTION )
+						data, hash, verified = log( pid, tid )
+						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Heap Corruption', pid, data, hash, Grinder::Core::WebStats::VERIFIED_INTERESTING )
 					elsif( info.code == Metasm::WinAPI::STATUS_ILLEGAL_INSTRUCTION )
 						data, hash, verified = log( pid, tid )
 						raise Grinder::Core::Debug::DebuggerException.new( @browser, @crashes_dir, 'Illegal Instruction', pid, data, hash, verified )
@@ -242,50 +321,7 @@ module Grinder
 					
 					super( pid, tid, info )
 				end
-				
-				def logger_file( pid )
-					"#{ @logdir }#{ @logdir.end_with?('\\') ? '' : '\\' }logger_#{ pid }.xml"
-				end
-				
-				def loader_logger( pid, imagebase )
-					print_status( "Logger DLL loaded into process #{pid} @ 0x#{'%08X' % imagebase }")
-					
-					setlogfile = get_dll_export( pid, imagebase, 'LOGGER_setLogFile' )
-					if( setlogfile )
-						file = logger_file( pid )
-						file_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, file.length, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_READWRITE )
-						@mem[pid][file_addr, file.length] = file
-						Metasm::WinAPI.createremotethread( @hprocess[pid], 0, 0, setlogfile, file_addr, 0, 0 )
-						print_status( "Logging process #{pid} to log file '#{file}'" )
-					else
-						print_error( "Failed to resolved grinder_logger!LOGGER_setLogFile" )
-					end
-					
-					if( not @attached[pid].logmessage )
-						logmessage = get_dll_export( pid, imagebase, 'LOGGER_logMessage' )
-						if( logmessage )
-							@attached[pid].logmessage = logmessage
-						else
-							print_error( "Failed to resolved grinder_logger!LOGGER_logMessage" )
-						end
-					end
-					
-					if( not @attached[pid].finishedtest )
-						finishedtest = get_dll_export( pid, imagebase, 'LOGGER_finishedTest' )
-						if( finishedtest )
-							@attached[pid].finishedtest = finishedtest
-						else
-							print_error( "Failed to resolved grinder_logger!LOGGER_finishedTest" )
-						end
-					end
-					
-					if( setlogfile and @attached[pid].logmessage and @attached[pid].finishedtest )
-						return true
-					end
-					
-					return false
-				end
-				
+
 				# Modified from METASM WinOS::Process.mappings (\metasm\os\windows.rb:899)
 				def mem_prot( pid, address )
 					info = Metasm::WinAPI.alloc_c_struct( "MEMORY_BASIC_INFORMATION32" )
@@ -325,21 +361,48 @@ module Grinder
 					mods = proc.modules.sort_by do | mod |
 						mod.addr
 					end
+
+					heaphook_parse_records( pid, mods )
+					
+					resolve_sym = lambda do | address |
+						sym = @attached[pid].address2symbol( address, mods )
+						if( not sym.empty? )
+							return " - #{sym}"
+						end
+						return ''
+					end
+					
+					chunks = []
+					
+					resolve_chunk = lambda do | address |
+						chunk = heaphook_find_chunk( address )
+						if( chunk )
+							if( chunks.include?( chunk ) )
+								return " - Heap Chunk %d" % ( chunks.index( chunk ) + 1 )
+							end
+							chunks << chunk
+							return " - Heap Chunk %d" % chunks.length
+						end
+						return ''
+					end
 					
 					log_data  = "Registers:\n"
-					log_data << "    EAX = 0x#{'%08X'%ctx[:eax]} - #{ mem_prot( pid, ctx[:eax] ) } - #{ @attached[pid].address2symbol( ctx[:eax], mods ) }\n"
-					log_data << "    EBX = 0x#{'%08X'%ctx[:ebx]} - #{ mem_prot( pid, ctx[:ebx] ) } - #{ @attached[pid].address2symbol( ctx[:ebx], mods ) }\n"
-					log_data << "    ECX = 0x#{'%08X'%ctx[:ecx]} - #{ mem_prot( pid, ctx[:ecx] ) } - #{ @attached[pid].address2symbol( ctx[:ecx], mods ) }\n"
-					log_data << "    EDX = 0x#{'%08X'%ctx[:edx]} - #{ mem_prot( pid, ctx[:edx] ) } - #{ @attached[pid].address2symbol( ctx[:edx], mods ) }\n"
-					log_data << "    ESI = 0x#{'%08X'%ctx[:esi]} - #{ mem_prot( pid, ctx[:esi] ) } - #{ @attached[pid].address2symbol( ctx[:esi], mods ) }\n"
-					log_data << "    EDI = 0x#{'%08X'%ctx[:edi]} - #{ mem_prot( pid, ctx[:edi] ) } - #{ @attached[pid].address2symbol( ctx[:edi], mods ) }\n"
-					log_data << "    EBP = 0x#{'%08X'%ctx[:ebp]} - #{ mem_prot( pid, ctx[:ebp] ) } - #{ @attached[pid].address2symbol( ctx[:ebp], mods ) }\n"
-					log_data << "    ESP = 0x#{'%08X'%ctx[:esp]} - #{ mem_prot( pid, ctx[:esp] ) } - #{ @attached[pid].address2symbol( ctx[:esp], mods ) }\n"
-					log_data << "    EIP = 0x#{'%08X'%ctx[:eip]} - #{ mem_prot( pid, ctx[:eip] ) } - #{ @attached[pid].address2symbol( ctx[:eip], mods ) }\n"
+					log_data << "    EAX = 0x#{'%08X'%ctx[:eax]} - #{ mem_prot( pid, ctx[:eax] ) }#{ resolve_sym.call( ctx[:eax] ) }#{ resolve_chunk.call( ctx[:eax] ) }\n"
+					log_data << "    EBX = 0x#{'%08X'%ctx[:ebx]} - #{ mem_prot( pid, ctx[:ebx] ) }#{ resolve_sym.call( ctx[:ebx] ) }#{ resolve_chunk.call( ctx[:ebx] ) }\n"
+					log_data << "    ECX = 0x#{'%08X'%ctx[:ecx]} - #{ mem_prot( pid, ctx[:ecx] ) }#{ resolve_sym.call( ctx[:ecx] ) }#{ resolve_chunk.call( ctx[:ecx] ) }\n"
+					log_data << "    EDX = 0x#{'%08X'%ctx[:edx]} - #{ mem_prot( pid, ctx[:edx] ) }#{ resolve_sym.call( ctx[:edx] ) }#{ resolve_chunk.call( ctx[:edx] ) }\n"
+					log_data << "    ESI = 0x#{'%08X'%ctx[:esi]} - #{ mem_prot( pid, ctx[:esi] ) }#{ resolve_sym.call( ctx[:esi] ) }#{ resolve_chunk.call( ctx[:esi] ) }\n"
+					log_data << "    EDI = 0x#{'%08X'%ctx[:edi]} - #{ mem_prot( pid, ctx[:edi] ) }#{ resolve_sym.call( ctx[:edi] ) }#{ resolve_chunk.call( ctx[:edi] ) }\n"
+					log_data << "    EBP = 0x#{'%08X'%ctx[:ebp]} - #{ mem_prot( pid, ctx[:ebp] ) }#{ resolve_sym.call( ctx[:ebp] ) }#{ resolve_chunk.call( ctx[:ebp] ) }\n"
+					log_data << "    ESP = 0x#{'%08X'%ctx[:esp]} - #{ mem_prot( pid, ctx[:esp] ) }#{ resolve_sym.call( ctx[:esp] ) }#{ resolve_chunk.call( ctx[:esp] ) }\n"
+					log_data << "    EIP = 0x#{'%08X'%ctx[:eip]} - #{ mem_prot( pid, ctx[:eip] ) }#{ resolve_sym.call( ctx[:eip] ) }#{ resolve_chunk.call( ctx[:eip] ) }\n"
 
 					offset = ctx[:eip]
+					
 					prog = Metasm::ExeFormat.new( Metasm::Ia32.new )
+					
 					log_data << "\nCode:\n"
+					
 					0.upto( 7 ) do
 						data = @mem[pid][offset,16]
 						asm  = prog.cpu.decode_instruction( Metasm::EncodedData.new(data), offset )
@@ -402,12 +465,35 @@ module Grinder
 							break if not data
 						end
 					end
-
-					if( @debugstrings.has_key?( pid ) )
-						log_data << "\nDebug Strings:\n"
+					
+					if( not chunks.empty? )
+						log_data << "\nHeap Chunks:\n"
+						index = 1
 						
-						@debugstrings[pid].each do | debugstring |
-							log_data << "    * #{debugstring.chomp}\n"
+						chunks.each do | chunk |
+							log_data << "    * Heap Chunk #{index}:\n"
+							log_data << "          #{chunk.to_s}\n"
+							chunk.callstack.each do | caller |
+								log_data << "          #{caller}\n"
+							end
+							# XXX: do a hex dump
+							log_data << "\n"
+							index += 1
+						end
+						
+						log_data << "\n"
+					end
+						
+					if( not @attached[pid].debugstrings.empty? )
+						log_data << "\nDebug Strings:\n"
+
+						@attached[pid].debugstrings.each do | debugstring |
+
+							debugstring = debugstring.chomp
+							
+							debugstring = heaphook_parse_debugstring( debugstring, pid, mods )
+							
+							log_data << "    * #{debugstring}\n"
 						end
 						
 						log_data << "\n"
@@ -454,18 +540,22 @@ module Grinder
 							e.set_testcase_crash
 						else
 							# log the crash to the console and optionally to the web
-							
+							log_data   = nil
 							crash_data = e.save_crash()
-							log_data   = e.save_log( logger_file( e.pid ) )
 							
 							if( not crash_data )
 								print_error( "Failed to save the crash file." )
 							end
 							
-							if( not log_data )
-								print_error( "Failed to save the log file." )
-							end
+							if( use_logger?( e.pid ) )
 							
+								log_data = e.save_log( logger_file( e.pid ) )
+								
+								if( not log_data )
+									print_error( "Failed to save the log file." )
+								end
+							end
+
 							e.log( crash_data, log_data )
 						end
 

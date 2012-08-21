@@ -8,13 +8,13 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include "ReflectiveLoader.h"
 
 // REFLECTIVEDLLINJECTION_VIA_LOADREMOTELIBRARYR and REFLECTIVEDLLINJECTION_CUSTOM_DLLMAIN are defined.
 
 extern HINSTANCE hAppInstance;
+
+typedef BOOL (* HEAPFLUSH)();
 
 HANDLE hLog                         = NULL;
 
@@ -22,11 +22,34 @@ char * cpLogFile                    = NULL;
 
 char * cpLogMessage                 = NULL;
 
+HEAPFLUSH pHeapFlush                = NULL;
+
 DWORD dwLogMessageSize              = 0;
 
 DWORD dwThrottle                    = 0;
 
 LPCRITICAL_SECTION pCriticalSection = NULL;
+
+/*
+ * Print debug output.
+ */
+VOID dprintf( char * cpFormat, ... )
+{
+	va_list vArgs;
+	char cBuffer[1024];
+	
+	va_start( vArgs, cpFormat );
+
+	vsnprintf_s( cBuffer, sizeof(cBuffer), sizeof(cBuffer) - 3, cpFormat, vArgs );
+
+	va_end( vArgs );
+
+	strcat_s( cBuffer, sizeof(cBuffer), "\r\n" );
+
+	OutputDebugString( cBuffer );
+
+	//printf( "%s", cBuffer );
+}
 
 BOOL LOGGER_init( VOID )
 {
@@ -36,7 +59,7 @@ BOOL LOGGER_init( VOID )
 	{
 		if( !pCriticalSection )
 		{
-			pCriticalSection = (LPCRITICAL_SECTION)malloc( sizeof(CRITICAL_SECTION) );
+			pCriticalSection = (LPCRITICAL_SECTION)HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(CRITICAL_SECTION) );
 			if( !pCriticalSection )
 				break;
 
@@ -45,13 +68,11 @@ BOOL LOGGER_init( VOID )
 
 		if( !cpLogMessage )
 		{
-			cpLogMessage = (char * )malloc( 8192 );
+			cpLogMessage = (char * )HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, 8192 );
 			if( !cpLogMessage )
 				break;
 
 			dwLogMessageSize = 8192;
-
-			memset( cpLogMessage, 0, dwLogMessageSize );
 		}
 
 		bSuccess = TRUE;
@@ -82,6 +103,15 @@ BOOL WINAPI DllMain( HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved )
 	return bReturnValue;
 }
 
+__declspec(dllexport) VOID LOGGER_setHeapFlush( HEAPFLUSH pFunction )
+{
+	EnterCriticalSection( pCriticalSection );
+
+	pHeapFlush = pFunction;
+
+	LeaveCriticalSection( pCriticalSection );
+}
+
 __declspec(dllexport) VOID LOGGER_setThrottle( DWORD dwMilliseconds )
 {
 	EnterCriticalSection( pCriticalSection );
@@ -93,6 +123,8 @@ __declspec(dllexport) VOID LOGGER_setThrottle( DWORD dwMilliseconds )
 
 __declspec(dllexport) VOID LOGGER_setLogFile( char * cpFile )
 {
+	DWORD dwSize;
+	
 	EnterCriticalSection( pCriticalSection );
 
 	do
@@ -101,17 +133,102 @@ __declspec(dllexport) VOID LOGGER_setLogFile( char * cpFile )
 			break;
 
 		if( cpLogFile )
-		{
-			free( cpLogFile );
+			HeapFree( GetProcessHeap(), 0, cpLogFile );
 
-			cpLogFile = NULL;
-		}
+		dwSize = strlen( cpFile ) + 1;
 
-		cpLogFile = (char *)malloc( strlen(cpFile) + 1 );
+		cpLogFile = (char *)HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize );
 		if( !cpLogFile )
 			break;
 
-		strcpy_s( cpLogFile, strlen(cpFile) + 1, cpFile );
+		strcpy_s( cpLogFile, dwSize, cpFile );
+
+	} while( 0 );
+
+	LeaveCriticalSection( pCriticalSection );
+}
+
+VOID logMessage( wchar_t * cpMessageW )
+{
+	DWORD dwLengthW;
+	DWORD dwLengthA;
+	DWORD dwTotal;
+	DWORD dwWritten;
+
+	do
+	{
+		if( !cpMessageW )
+			break;
+
+		dwLengthW = wcslen( cpMessageW ) + 1;
+
+		dwLengthA = WideCharToMultiByte( CP_ACP, 0, cpMessageW, dwLengthW, 0, 0, NULL, NULL );
+
+		if( dwLengthA > dwLogMessageSize )
+		{
+			if( cpLogMessage )
+			{
+				RtlZeroMemory( cpLogMessage, dwLogMessageSize );
+
+				HeapFree( GetProcessHeap(), 0, cpLogMessage );
+			}
+
+			dwLogMessageSize = dwLengthA + ( 1024 - ( dwLengthA % 1024 ) );
+
+			cpLogMessage = (char * )HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, dwLogMessageSize );
+			if( !cpLogMessage )
+			{
+				dwLogMessageSize = 0;
+				break;
+			}
+		}
+
+		WideCharToMultiByte( CP_ACP, 0, cpMessageW, dwLengthW, cpLogMessage, dwLengthA, NULL, NULL );
+		
+		cpLogMessage[dwLengthA] = 0;
+
+		if( !hLog && cpLogFile )
+		{
+			hLog = CreateFile( cpLogFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+			if( hLog == INVALID_HANDLE_VALUE )
+				hLog = NULL;
+		}
+
+		if( !hLog )
+			break;
+
+		dwTotal    = 0;
+		
+		dwWritten  = 0;
+
+		dwLengthA -= 1;
+
+		while( dwTotal < dwLengthA )
+		{
+			if( !WriteFile( hLog, (LPCVOID)((BYTE *)(cpLogMessage + dwTotal)), (dwLengthA - dwTotal), &dwWritten, NULL ) )
+				break;
+
+			dwTotal += dwWritten;
+		}
+
+	} while( 0 );
+
+	if( dwThrottle )
+	{
+		Sleep( dwThrottle );
+	}
+}
+
+__declspec(dllexport) VOID LOGGER_startingTest( wchar_t * cpMessageW )
+{
+	EnterCriticalSection( pCriticalSection );
+
+	do
+	{
+		if( pHeapFlush )
+			pHeapFlush();
+
+		logMessage( cpMessageW );
 
 	} while( 0 );
 
@@ -127,6 +244,8 @@ __declspec(dllexport) VOID LOGGER_finishedTest( wchar_t * cpMessageW )
 		if( !hLog )
 			break;
 
+		logMessage( cpMessageW );
+
 		CloseHandle( hLog );
 
 		hLog = NULL;
@@ -138,75 +257,22 @@ __declspec(dllexport) VOID LOGGER_finishedTest( wchar_t * cpMessageW )
 
 __declspec(dllexport) VOID LOGGER_logMessage( wchar_t * cpMessageW )
 {
-	DWORD lenW;
-	DWORD lenA;
-
 	EnterCriticalSection( pCriticalSection );
 
-	do
-	{
-		if( !cpMessageW )
-			break;
+	logMessage( cpMessageW );
 
-		lenW = wcslen( cpMessageW ) + 1;
+	LeaveCriticalSection( pCriticalSection );
+}
 
-		lenA = WideCharToMultiByte( CP_ACP, 0, cpMessageW, lenW, 0, 0, NULL, NULL );
+__declspec(dllexport) DWORD * LOGGER_FuzzerIdx = (DWORD *)-1;
 
-		if( lenA > dwLogMessageSize )
-		{
-			if( cpLogMessage )
-			{
-				memset( cpLogMessage, 0, dwLogMessageSize );
+__declspec(dllexport) VOID LOGGER_logMessage2( wchar_t * cpMessageW, DWORD dwIdx )
+{
+	EnterCriticalSection( pCriticalSection );
+	
+	InterlockedExchange( (DWORD *)&LOGGER_FuzzerIdx, dwIdx );
 
-				free( cpLogMessage );
-			}
-
-			dwLogMessageSize = lenA + ( 1024 - ( lenA % 1024 ) );
-
-			cpLogMessage = (char * )malloc( dwLogMessageSize );
-			if( !cpLogMessage )
-			{
-				dwLogMessageSize = 0;
-				break;
-			}
-
-			memset( cpLogMessage, 0, dwLogMessageSize );
-		}
-
-		WideCharToMultiByte( CP_ACP, 0, cpMessageW, lenW, cpLogMessage, lenA, NULL, NULL );
-		
-		cpLogMessage[lenA] = 0;
-
-		if( !hLog && cpLogFile )
-		{
-			hLog = CreateFile( cpLogFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
-			if( hLog == INVALID_HANDLE_VALUE )
-			{
-				hLog = NULL;
-			}
-		}
-
-		if( hLog )
-		{
-			DWORD dwTotal   = 0;
-			DWORD dwWritten = 0;
-			DWORD dwLength  = strlen( cpLogMessage );
-
-			while( dwTotal < dwLength )
-			{
-				if( !WriteFile( hLog, (LPCVOID)((LPBYTE)(cpLogMessage + dwTotal)), (dwLength - dwTotal), &dwWritten, NULL ) )
-					break;
-
-				dwTotal += dwWritten;
-			}
-		}
-
-	} while( 0 );
-
-	if( dwThrottle )
-	{
-		Sleep( dwThrottle );
-	}
+	logMessage( cpMessageW );
 
 	LeaveCriticalSection( pCriticalSection );
 }

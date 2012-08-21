@@ -169,6 +169,14 @@ module Grinder
 						response.status          = 200
 						response['Content-Type'] = 'text/html'
 						response.body            = '<p>Hello from grind.html</p>'
+					elsif( request.path == '/grind.css' )
+						response.status          = 200
+						response['Content-Type'] = 'text/css'
+						response.body            = 'body { color:red; }'
+					elsif( request.path == '/grind.swf' )
+						response.status          = 200
+						response['Content-Type'] = 'application/x-shockwave-flash'
+						response.body            = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 					elsif( request.path == '/grind.svg' )
 						response.status          = 200
 						response['Content-Type'] = 'image/svg+xml'

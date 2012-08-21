@@ -25,6 +25,8 @@ def config_init( config_file )
 		
 		eval( "$testcase_opts = ::Hash.new" ) if $testcase_opts == nil
 		
+		eval( "$instrument_heap = false" ) if $instrument_heap == nil
+		
 		# patch any global vars here...
 		global_variables.each do | v | 
 			

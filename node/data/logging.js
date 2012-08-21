@@ -46,11 +46,13 @@ function tickle( obj )
 // passed in by the logger class and write them to disk.
 function LOGGER( name )
 {
-	this.name    = name;
-	this.browser = '';
+	this.name        = name;
+	this.browser     = '';
 	
-	idx          = 0;
-	unique_types = [];
+	var idx          = 0;
+	var unique_types = [];
+	var log_xml      = null;
+	var log_xml_idx  = null;
 	
 	this.get_browser = function()
 	{
@@ -70,6 +72,64 @@ function LOGGER( name )
 	
 	// Access this instance variable to get the browser...
 	this.browser = this.get_browser();
+
+	if( this.browser == 'CM' || this.browser == 'FF' || this.browser == 'SF' )
+	{
+		log_xml = function( xml )
+		{
+			parseFloat( unescape( '%uC0DE%uDEAD' + xml + '%u0000' ) );
+		};
+
+		log_xml_idx = function( xml, _idx )
+		{
+			parseFloat( unescape( '%uCAFE%uDEAD' + dword2data( _idx ) + xml + '%u0000' ) );
+		};
+		
+		// You call this to indicate logging is starting...
+		this.starting = function()
+		{
+			parseFloat( unescape( '%uBEEF%uDEAD' + '<fuzzer name="' + xml_escape( this.name ) + '" browser="' + xml_escape( this.browser ) + '">' + '%u0000' ) );
+		};
+		
+		// You call this to indicate logging is finished...
+		this.finished = function()
+		{
+			parseFloat( unescape( '%uF00D%uDEAD' + '</fuzzer>' + '%u0000' ) );
+		};
+		
+		// You call this to trigger an access violation (attempted write to a bad address)...
+		this.debugbreak = function()
+		{
+			parseFloat( unescape( '%uDEAD%uDEAD' + '%u0000' ) );
+		};
+	}
+	else
+	{
+		log_xml = function( xml )
+		{
+			parseFloat( unescape( '%uC0DE%uDEAD') + xml );
+		};
+		
+		log_xml_idx = function( xml, _idx )
+		{
+			parseFloat( unescape( '%uCAFE%uDEAD') + dword2data( _idx ) + xml );
+		};
+		
+		this.starting = function()
+		{
+			parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + xml_escape( name ) + '" browser="' + xml_escape( this.browser ) + '">' );
+		};
+		
+		this.finished = function()
+		{
+			parseFloat( unescape( '%uF00D%uDEAD') + '</fuzzer>' );
+		};
+		
+		this.debugbreak = function()
+		{
+			parseFloat( unescape( '%uDEAD%uDEAD' ) );
+		};
+	}
 	
 	// Call this instance method to generate a unique name for a type, e.g.
 	//     The first call to unique_id( 'id' ) will first produce 'id_0'
@@ -86,6 +146,24 @@ function LOGGER( name )
 		unique_types[type] += 1;
 
 		return result;
+	};
+	
+	// Call this instance method to retrieve a random id of a previous type.
+	this.rand_id = function( type )
+	{
+		if( typeof unique_types[type] == 'undefined' )
+			unique_types[type] = 0;
+		
+		return type + '_' + rand( unique_types[type] );
+	};
+	
+	// Call this instance method to retrieve the number of ID's of this type
+	this.count_id = function( type )
+	{
+		if( typeof unique_types[type] == 'undefined' )
+			return 0;
+		
+		return unique_types[type];
 	};
 	
 	// Used to log a message from the fuzzer to the log file on disk. This is how we recreate testcases at a later stage.
@@ -135,7 +213,7 @@ function LOGGER( name )
 				xml += '<location>' + xml_escape( location ) + '</location>';
 				xml += '<count>' + count + '</count>';
 
-				log_xml( xml );
+				log_xml_idx( xml, idx );
 			
 				for( var m in message )
 					last_idx = this.log( message[m], location, 1 );
@@ -144,10 +222,13 @@ function LOGGER( name )
 			}
 		}
 		
+		//if( idx == 111 )
+		//	this.debugbreak();
+			
 		return last_idx;
 	};
 	
-	xml_escape = function( message )
+	var xml_escape = function( message )
 	{
 		message = message.replace( /</g, "&lt;" );
 		message = message.replace( />/g, "&gt;" );
@@ -158,7 +239,7 @@ function LOGGER( name )
 		return message;
 	};
 	
-	log_message = function( message, location, count )
+	var log_message = function( message, location, count )
 	{
 		idx += 1;
 		
@@ -169,47 +250,18 @@ function LOGGER( name )
 		xml += '<count>' + count + '</count>';
 		xml += '</log>';
 
-		log_xml( xml );
+		log_xml_idx( xml, idx );
 		
 		return idx - 1;
 	};
 	
-	if( this.browser == 'CM' || this.browser == 'FF' || this.browser == 'SF' )
+	var dword2data = function( dword )
 	{
-		log_xml = function( xml )
-		{
-			parseFloat( unescape( '%uC0DE%uDEAD' + xml + '%u0000' ) );
-		};
-
-		// You call this to indicate logging is starting...
-		this.starting = function()
-		{
-			parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + xml_escape( this.name ) + '" browser="' + xml_escape( this.browser ) + '">' + '%u0000' );
-		};
-		
-		// You call this to indicate logging is finished...
-		this.finished = function()
-		{
-			parseFloat( unescape( '%uF00D%uDEAD' + '</fuzzer>' + '%u0000' ) );
-		};
-	}
-	else
-	{
-		log_xml = function( xml )
-		{
-			parseFloat( unescape( '%uC0DE%uDEAD') + xml );
-		};
-		
-		this.starting = function()
-		{
-			parseFloat( unescape( '%uBEEF%uDEAD') + '<fuzzer name="' + xml_escape( name ) + '" browser="' + xml_escape( this.browser ) + '">' );
-		};
-		
-		this.finished = function()
-		{
-			parseFloat( unescape( '%uF00D%uDEAD') + '</fuzzer>' );
-		};
-	}
+		var d = Number( dword ).toString( 16 );
+		while( d.length < 8 )
+			d = '0' + d;
+		return unescape( '%u' + d.substr( 4, 8 ) + '%u' + d.substr( 0, 4 ) );
+	};
 	
 	this.type = function( name, obj, obj_hint )
 	{

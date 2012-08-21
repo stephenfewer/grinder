@@ -62,14 +62,25 @@ module Grinder
 				
 				patch_size = 0
 				
-				# we first disasemble the function looking for the first call (to mozjs!js_ValueToString)
+				# we first disassemble the function looking for the first call (to mozjs!js::ToStringSlow)
 				# once found we want to place out hook after this function call as it
 				# resolves the input parameter to its unicode string for us. We then
 				# calculate the number of instructions after the call which we will
 				# overwrite (to avoid munging half an instruction)
-				Metasm::Shellcode.disassemble( cpu, code ).decoded.each_value do | di |
-					if( not found and di.opcode.name.downcase == 'call' ) # XXX: we should sanity check this is actually for mozjs!js_ValueToString
-						parsefloat += di.address + di.bin_length
+				
+				eip = parsefloat
+				
+				# Note: We dont use "Metasm::Shellcode.disassemble( cpu, code ).decoded.each_value do | di |"
+				# as this will follow conditional jumps and we need a simple linear disassembly
+				while true do
+					di = cpu.decode_instruction( ::Metasm::EncodedData.new( code ), eip )
+
+					eip += di.bin_length
+					
+					code = code[ di.bin_length, code.length ]
+					
+					if( not found and di.opcode.name.downcase == 'call' ) # XXX: we should sanity check this is actually for mozjs!js::ToStringSlow
+						parsefloat = di.address + di.bin_length
 						found = true
 						next
 					end
@@ -84,6 +95,8 @@ module Grinder
 					return false
 				end
 				
+				print_status( "call to js::ToStringSlow @ 0x#{'%08X' % parsefloat }" )
+				
 				backup     = @mem[pid][parsefloat,patch_size]
 				
 				proxy_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, 1024, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
@@ -92,22 +105,47 @@ module Grinder
 				proxy = Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
-					mov ebx, [eax+4]
-					lea eax, [ebx+4]
-					mov ebx, [ebx]
+					test eax, eax
+					jz passthru_end2
+					mov eax, [eax+4]
+					
+					mov ebx, [eax]
+					lea eax, [eax+4]
 					push eax
+					cmp ebx, 0xDEADCAFE
+					jne passthru1
+					pop eax
+					push dword [eax]
+					lea eax, [eax+4]
+					push eax
+					mov edi, 0x#{'%08X' % @attached[pid].logmessage2 }
+					call edi
+					pop eax
+					jmp passthru_end
+				passthru1:
 					cmp ebx, 0xDEADC0DE
-					jne passthruA
+					jne passthru2
 					mov edi, 0x#{'%08X' % @attached[pid].logmessage }
 					call edi
-					jmp passthruB
-				passthruA:
+					jmp passthru_end
+				passthru2:
 					cmp ebx, 0xDEADF00D
-					jne passthruB
+					jne passthru3
 					mov edi, 0x#{'%08X' % @attached[pid].finishedtest }
 					call edi
-				passthruB:
+					jmp passthru_end
+				passthru3:
+					cmp ebx, 0xDEADBEEF
+					jne passthru4
+					mov edi, 0x#{'%08X' % @attached[pid].startingtest }
+					call edi
+				passthru4:
+					cmp ebx, 0xDEADDEAD
+					jne passthru_end
+					mov [ebx], ebx
+				passthru_end:
 					pop eax
+				passthru_end2:
 					popad
 					popfd
 				} ).encode_string

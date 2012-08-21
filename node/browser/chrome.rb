@@ -57,7 +57,7 @@ module Grinder
 				
 				cpu        = Metasm::Ia32.new
 				
-				patch_size = 5
+				patch_size = 6
 				
 				backup     = @mem[pid][parsefloat,patch_size]
 				
@@ -73,17 +73,38 @@ module Grinder
 					mov ebx, [eax]
 					lea eax, [eax+4]
 					push eax
+					cmp ebx, 0xDEADCAFE
+					jne passthru1
+					pop eax
+					push dword [eax]
+					lea eax, [eax+4]
+					push eax
+					mov edi, 0x#{'%08X' % @attached[pid].logmessage2 }
+					call edi
+					pop eax
+					jmp passthru_end
+				passthru1:
 					cmp ebx, 0xDEADC0DE
-					jne passthruA
+					jne passthru2
 					mov edi, 0x#{'%08X' % @attached[pid].logmessage }
 					call edi
-					jmp passthruB
-				passthruA:
+					jmp passthru_end
+				passthru2:
 					cmp ebx, 0xDEADF00D
-					jne passthruB
+					jne passthru3
 					mov edi, 0x#{'%08X' % @attached[pid].finishedtest }
 					call edi
-				passthruB:
+					jmp passthru_end
+				passthru3:
+					cmp ebx, 0xDEADBEEF
+					jne passthru4
+					mov edi, 0x#{'%08X' % @attached[pid].startingtest }
+					call edi
+				passthru4:
+					cmp ebx, 0xDEADDEAD
+					jne passthru_end
+					mov [ebx], ebx
+				passthru_end:
 					pop eax
 					popad
 					popfd

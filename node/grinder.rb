@@ -72,46 +72,59 @@ class Grinder
 			print_error( "Error, you are not running this node from the \\grinder\\node\\ directory. You need to change the working directory (cd path\\to\\grinder\\node\\) and try again." )
 			return false
 		end
-		
-		root = "c:\\windows"
-		if( ENV.include?( 'SystemRoot' ) )
-			root = ENV[ 'SystemRoot' ]
-		end
-		
-		sysdir = 'system32'
-		if( ::Dir.exist?( "#{root}\\syswow64\\" ) )
-			sysdir = 'syswow64'
-		end
-		
-		grinder_logger = "#{root}\\#{sysdir}\\grinder_logger.dll"
-		
-		if( not ::File.exist?( grinder_logger ) )
-			begin
-				::File.open( '.\\data\\grinder_logger.dll', 'rb' ) do | dll_src |
-					::File.open( grinder_logger, 'wb' ) do | dll_dst |
-						dll_dst.write( dll_src.read( dll_src.stat.size ) )
-						print_status( "Created the grinder logger DLL '#{grinder_logger}'." )
+
+		check_dll = lambda do | dllname, dlltitle |
+			
+			root = "c:\\windows"
+			if( ENV.include?( 'SystemRoot' ) )
+				root = ENV[ 'SystemRoot' ]
+			end
+			
+			sysdir = 'system32'
+			if( ::Dir.exist?( "#{root}\\syswow64\\" ) )
+				sysdir = 'syswow64'
+			end
+			
+			dllpath = "#{root}\\#{sysdir}\\#{dllname}"
+			
+			if( not ::File.exist?( dllpath ) )
+				begin
+					::File.open( ".\\data\\#{dllname}", 'rb' ) do | dll_src |
+						::File.open( dllpath, 'wb' ) do | dll_dst |
+							dll_dst.write( dll_src.read( dll_src.stat.size ) )
+							print_status( "Created the grinder #{dlltitle} DLL '#{dllpath}'." )
+						end
+					end
+				rescue
+					print_error( "Error, the grinder #{dlltitle} DLL '#{dllpath}' does not exist. Please manually copy this file from the \\grinder\\node\\data\\ directory." )
+					return false
+				end
+			end
+			
+			::File.open( ".\\data\\#{dllname}", 'rb' ) do | dll_src |
+				::File.open( dllpath, 'rb' ) do | dll_dst |
+					
+					gl1 = dll_src.read( dll_src.stat.size )
+					
+					gl2 = dll_dst.read( dll_dst.stat.size )
+
+					if( ::Digest::SHA256.digest( gl1 ) != ::Digest::SHA256.digest( gl2 ) )
+						print_warning( "Warning, the grinder #{dlltitle} DLL '#{dllpath}' does not match the one from the \\grinder\\node\\data\\ directory. Please make sure you are using the latest one." )
 					end
 				end
-			rescue
-				print_error( "Error, the grinder logger DLL '#{grinder_logger}' does not exist. Please manually copy this file from the \\grinder\\node\\data\\ directory." )
-				return false
 			end
+			
+			return true
 		end
 		
-		::File.open( '.\\data\\grinder_logger.dll', 'rb' ) do | dll_src |
-			::File.open( grinder_logger, 'rb' ) do | dll_dst |
-				
-				gl1 = dll_src.read( dll_src.stat.size )
-				
-				gl2 = dll_dst.read( dll_dst.stat.size )
-
-				if( ::Digest::SHA256.digest( gl1 ) != ::Digest::SHA256.digest( gl2 ) )
-					print_warning( "Warning, the grinder logger DLL '#{grinder_logger}' does not match the one from the \\grinder\\node\\data\\ directory. Please make sure you are using the latest one." )
-				end
-			end
+		if( not check_dll.call( 'grinder_logger.dll', 'logger' ) )
+			return false
 		end
 
+		if( not check_dll.call( 'grinder_heaphook.dll', 'heap hook' ) )
+			return false
+		end
+		
 		return true
 	end
 

@@ -13,6 +13,25 @@ module Grinder
 	
 		class InternetExplorer < Grinder::Core::Debugger
 			
+			@@cached_version = -1
+			
+			def ie_major_version
+				begin
+					if( @@cached_version != -1 )
+						return @@cached_version
+					end
+					pe = Metasm::PE.decode_file_header( InternetExplorer.target_exe )
+					version = pe.decode_version
+					if( version['FileVersion'] )
+						result = version['FileVersion'].scan( /(\d*)/ )
+						@@cached_version = result.first.first.to_i
+						return @@cached_version
+					end
+				rescue
+				end
+				return -1
+			end
+			
 			def self.target_exe
 				return $internetexplorer_exe
 			end
@@ -26,7 +45,9 @@ module Grinder
 			
 			# we dont want to use grinder_heaphook.dll in the broker process...
 			def use_heaphook?( pid )
-				if( @attached[pid].commandline =~ /SCODEF:/i )
+				if( ie_major_version == 8 )
+					return true
+				elsif( ie_major_version >= 9 && @attached[pid].commandline =~ /SCODEF:/i )
 					return true
 				end
 				return false
@@ -34,38 +55,24 @@ module Grinder
 			
 			# we dont want to use grinder_logger.dll in the broker process...
 			def use_logger?( pid )
-				if( @attached[pid].commandline =~ /SCODEF:/i )
+				if( ie_major_version == 8 )
+					return true
+				elsif( ie_major_version >= 9 && @attached[pid].commandline =~ /SCODEF:/i )
 					return true
 				end
 				return false
 			end
 			
 			def loaders( pid, path, addr )
-				if( path.include?( 'jscript9' ) )
+				@browser = "IE" + ie_major_version.to_s
 				
-					@browser = "IE9"
-					
+				if( path.include?( 'jscript9' ) )
 					# IE10 (Windows 8 Consumer Preview) uses the module jscript9.dll but we
 					# exhamine the version number to determine if its actually IE10 or IE9.
-					begin
-						pe = Metasm::PE.decode_file_header( path )
-							
-						version = pe.decode_version
-						
-						if( version['FileVersion'] )
-							result = version['FileVersion'].scan( /(\d*)/ )
-							if( not result.empty? )
-								@browser = "IE" + result.first.first
-							end
-						end
-					rescue
-					end
-
 					if( not @attached[pid].jscript_loaded )
 						@attached[pid].jscript_loaded = loader_javascript_ie9( pid, addr )
 					end
 				elsif( path.include?( 'jscript' ) )
-					@browser = "IE8"
 					if( not @attached[pid].jscript_loaded )
 						@attached[pid].jscript_loaded = loader_javascript_ie8( pid, addr )
 					end

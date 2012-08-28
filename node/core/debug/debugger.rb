@@ -82,7 +82,7 @@ module Grinder
 					len, max, buff = @mem[pid][ processparams + 0x40, 8 ].unpack('vvV')
 					return '' if not buff or len == 0
 					
-					return @mem[pid][ buff, len ].unpack('S*').pack('C*') 
+					return @mem[pid][ buff, len ].unpack('S*').pack('C*').gsub( "\x00", '' )
 				end
 				
 				def handler_newprocess( pid, tid, info )
@@ -225,17 +225,13 @@ module Grinder
 				end
 
 				def handler_debugstring( pid, tid, info )
-					#info.ptr = @mem[pid][info.ptr, 4].unpack('L').first
-					debugstring = @mem[pid][info.ptr, info.length]
-					
-					debugstring = debugstring.unpack('S*').pack('C*') if info.unicode != 0
-					
-					debugstring = debugstring[0, debugstring.index( "\x00" )] if debugstring.index( "\x00" )
-					
-					if( debugstring.ascii_only? and not debugstring.empty? )
-					
+
+					debugstring = @mem[pid][info.ptr, info.length].unpack( info.unicode == 0 ? 'C*' : 'v*' )
+
+					debugstring = debugstring.pack('C*') rescue debugstring.pack('v*')
+				
+					if( debugstring.force_encoding("UTF-8").ascii_only? and not debugstring.empty? )
 						@attached[pid].debugstrings << debugstring
-						
 						print_status( "Debug message from process #{pid}: #{debugstring}" )
 					end
 					
@@ -496,6 +492,12 @@ module Grinder
 							log_data << "    * #{debugstring}\n"
 						end
 						
+						log_data << "\n"
+					end
+					
+					if( not @attached[pid].commandline.empty? )
+						log_data << "Command Line:\n"
+						log_data << "    #{@attached[pid].commandline}\n"
 						log_data << "\n"
 					end
 					

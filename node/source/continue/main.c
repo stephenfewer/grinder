@@ -105,7 +105,7 @@ void main( void )
 		hWindow = FindWindow( NULL, "Are you sure?" );
 		if( hWindow )
 		{
-			// cant find the 'Leave Page' button.
+			SendMessage( hWindow, WM_KEYDOWN, VK_RETURN, 0 );
 		}
 
 		hWindow = FindWindow( NULL, "Google Chrome" );
@@ -119,6 +119,7 @@ void main( void )
 		{
 			EnumChildWindows( hWindow, enumproc, 0 );
 		}
+
 		Sleep( 250 );
 	}
 }

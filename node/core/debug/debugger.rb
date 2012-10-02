@@ -161,7 +161,7 @@ module Grinder
 					end
 	
 					proc.modules.each do | mod |
-				
+							
 						if( mod.path.downcase.include?( @heaphook_dll ) )
 							
 							if( instrument_heap and not @attached[pid].heaphook_loaded )
@@ -207,12 +207,12 @@ module Grinder
 							# if everything is loaded for this process we do not itterate through this.
 							if( not @attached[pid].all_loaded or not @attached[pid].logger_loaded )
 								proc.modules.each do | mod |
-									if( mod.path.include?( @logger ) )
+									if( mod.path.downcase.include?( @logger ) )
 										if( not @attached[pid].logger_loaded )
 											@attached[pid].logger_loaded = loader_logger( pid, mod.addr )
 										end
 									else 
-										loaders( pid, mod.path, mod.addr )
+										loaders( pid, mod.path.downcase, mod.addr )
 									end
 								end
 							end

@@ -121,9 +121,10 @@ class Grinder
 			return false
 		end
 
-		if( not check_dll.call( 'grinder_heaphook.dll', 'heap hook' ) )
-			return false
-		end
+		# sf: we are not using heaphook yet so this stays commented out for now.
+		#if( not check_dll.call( 'grinder_heaphook.dll', 'heap hook' ) )
+		#	return false
+		#end
 		
 		return true
 	end

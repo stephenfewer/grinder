@@ -62,7 +62,7 @@ module Grinder
 				
 				patch_size = 0
 				
-				# we first disassemble the function looking for the first call (to mozjs!js::ToStringSlow)
+				# we first disassemble the function looking for the first call (to mozjs!js_strtod)
 				# once found we want to place out hook after this function call as it
 				# resolves the input parameter to its unicode string for us. We then
 				# calculate the number of instructions after the call which we will
@@ -79,7 +79,7 @@ module Grinder
 					
 					code = code[ di.bin_length, code.length ]
 					
-					if( not found and di.opcode.name.downcase == 'call' ) # XXX: we should sanity check this is actually for mozjs!js::ToStringSlow
+					if( not found and di.opcode.name.downcase == 'call' ) # XXX: we should sanity check this is actually for mozjs!js_strtod
 						parsefloat = di.address + di.bin_length
 						found = true
 						next
@@ -95,7 +95,7 @@ module Grinder
 					return false
 				end
 				
-				print_status( "call to js::ToStringSlow @ 0x#{'%08X' % parsefloat }" )
+				print_status( "call to js_strtod @ 0x#{'%08X' % parsefloat }" )
 				
 				backup     = @mem[pid][parsefloat,patch_size]
 				
@@ -105,9 +105,9 @@ module Grinder
 				proxy = Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
-					test eax, eax
+					test edi, edi
 					jz passthru_end2
-					mov eax, [eax+4]
+					mov eax, edi
 					
 					mov ebx, [eax]
 					lea eax, [eax+4]

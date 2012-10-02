@@ -1,5 +1,5 @@
-Version 0.3 - In Development!
-=============================
+Version 0.3 - 02 Oct 2012
+=========================
 
 Server
 ------
@@ -8,10 +8,14 @@ Server
 	
 Node
 ----
+	* Add in initial work for automated testcase reduction via .\node\reduction.rb
+	* Added IE10 support (As seen in Windows 8 Consumer Preview) (grinder\node\browser\internetexplorer.rb).
 	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Usefull for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
-	* Added a --help and --version parameter to grinder.rb.
-
-
+	* Added a --help and --version parameter to grinder.rb and testcase.rb.
+	* grinder_logger.dll is now thread safe and can handle log messages of an arbitrary size.
+	* Changed the server.rb 301 reditect to a 307 temporary redirect.
+	* Many small bug fixes!
+	
 Version 0.2 - 08 Feb 2012
 =========================
 

@@ -54,6 +54,27 @@ function LOGGER( name )
 	var log_xml      = null;
 	var log_xml_idx  = null;
 	
+	this.gc = function()
+	{
+		var i;
+		if( this.browser == 'IE' )
+		{
+			CollectGarbage();
+		}
+		else if( this.browser == 'CM' )
+		{
+			p = [];
+			q = Array( 100 ).join( unescape( '%u7F7F' ) );
+			for( i=25000; i > 0 ; i-- ) 
+				p.push( new String( q ) );
+		}
+		else
+		{
+		    for( i=0; i < 10000; i++ )
+				var s = new String( unescape( '%u7F7F%u7F7F' ) );
+		}
+	};
+	
 	this.get_browser = function()
 	{
 		if( /Firefox[\/\s](\d+\.\d+)/.test(navigator.userAgent) )

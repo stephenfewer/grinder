@@ -184,7 +184,7 @@ class Grinder
 
 					begin
 						::Process.kill( "KILL", $debugger_pid )
-					rescue ::Errno::ESRCH
+					rescue ::Errno::ESRCH, Errno::ECHILD
 					end
 					
 					if( server_reset <= 0 )
@@ -194,7 +194,7 @@ class Grinder
 						begin
 							::Process.kill( "KILL", $server_pid )
 							::Process.wait( $server_pid )
-						rescue ::Errno::ESRCH
+						rescue ::Errno::ESRCH, Errno::ECHILD
 						end
 						
 						$server_pid = nil
@@ -207,7 +207,7 @@ class Grinder
 
 			begin
 				::Process.wait( $debugger_pid )
-			rescue ::Errno::ESRCH
+			rescue ::Errno::ESRCH, Errno::ECHILD
 			end
 			
 			$debugger_pid = nil

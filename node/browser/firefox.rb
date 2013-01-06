@@ -107,7 +107,7 @@ module Grinder
 					pushad
 					test edi, edi
 					jz passthru_end2
-					mov eax, edi
+					mov eax, [edi+4]
 					
 					mov ebx, [eax]
 					lea eax, [eax+4]

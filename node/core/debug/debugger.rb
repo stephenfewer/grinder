@@ -616,7 +616,12 @@ module Grinder
 						mods = proc.modules
 						if( mods )
 							if( mods.first and mods.first.path.include?( exe_file ) )
-								print_error( "Found an instance of #{exe_file} already running, quiting." )
+								print_error( "Found an instance of #{exe_file} already running, killing..." )
+								begin
+									::Process.kill( "KILL", proc.pid )
+									::Process.wait( proc.pid )
+								rescue ::Errno::ESRCH, Errno::ECHILD
+								end
 								::Kernel::exit( -2 )
 							end
 						end

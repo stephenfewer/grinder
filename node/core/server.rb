@@ -125,7 +125,7 @@ module Grinder
 					if( request.path == '/grinder' )
 						tcpm_update
 						response.status          = @@fuzzers.length > @@index ? 200 : 404
-						response['Content-Type'] = 'text/html'
+						response['Content-Type'] = 'text/html; charset=utf-8;'
 						response.body            = @@fuzzers.length > @@index ? @@fuzzers[ @@index ][ 1 ] : ''
 					elsif( request.path == '/favicon.ico' )
 						response.status          = 404
@@ -137,7 +137,7 @@ module Grinder
 						response.body            = @@logging_js
 					elsif( request.path == '/testcase_generate' )
 						html                     = @@reductor ? @@reductor.testcase_generate : nil
-						response['Content-Type'] = 'text/html'
+						response['Content-Type'] = 'text/html; charset=utf-8;'
 						if( html )
 							tcpm_update
 							response.status      = 200
@@ -150,7 +150,7 @@ module Grinder
 						@@reductor.testcase_processed if @@reductor
 						# use a 307 temporary redirect back to /testcase_generate to keep this show on the road
 						response.status          = 307 
-						response['Content-Type'] = 'text/html'
+						response['Content-Type'] = 'text/html; charset=utf-8;'
 						response['Location']     = '/testcase_generate'
 						response.body            = ''
 					elsif( request.path == '/grind.jpg' )
@@ -167,7 +167,7 @@ module Grinder
 						response.body            = 'var ph33r;'
 					elsif( request.path == '/grind.html' )
 						response.status          = 200
-						response['Content-Type'] = 'text/html'
+						response['Content-Type'] = 'text/html; charset=utf-8;'
 						response.body            = '<p>Hello from grind.html</p>'
 					elsif( request.path == '/grind.css' )
 						response.status          = 200
@@ -184,7 +184,7 @@ module Grinder
 					else
 						# all requests that would generate a 404 response are instead handled with a 307 temporary redirect back to /grinder
 						response.status          = 307
-						response['Content-Type'] = 'text/html'
+						response['Content-Type'] = 'text/html; charset=utf-8;'
 						response['Location']     = '/grinder'
 						response.body            = ''
 					end

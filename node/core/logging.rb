@@ -5,7 +5,7 @@
 #
 		
 $version_major = 0
-$version_minor = 3
+$version_minor = 4
 $version_dev   = true
 
 $print_owner   = ''

@@ -18,7 +18,7 @@ module Grinder
 			end
 			
 			def loaders( pid, path, addr )
-				if( path.include?( 'JavaScriptCore' ) )
+				if( path.include?( 'javascriptcore.dll' ) )
 					@browser = 'SF'
 					if( not @attached[pid].jscript_loaded )
 						@attached[pid].jscript_loaded = loader_javascript_safari( pid, addr )
@@ -27,6 +27,7 @@ module Grinder
 				@attached[pid].all_loaded = @attached[pid].jscript_loaded
 			end
 
+			# Tested against latest Safari 1.7.1 (7534.57.2)
 			def loader_javascript_safari( pid, imagebase )
 				print_status( "JavaScriptCore.dll DLL loaded into process #{pid} at address 0x#{'%08X' % imagebase }" )
 				
@@ -45,6 +46,7 @@ module Grinder
 				# .rdata:1012D854                 dd offset sub_10105E26
 				
 				# first, find the location of the 'parseFloat' string in the images memory
+				# WinDbg: s -a JavaScriptCore Lffffff parseFloat
 				parsefloat = @mem[pid][ imagebase, 0xFFFFFF ].index('parseFloat')
 				if( not parsefloat )
 					print_error( "Unable to resolved JavaScriptCore!parseFloat (1)" )
@@ -53,6 +55,7 @@ module Grinder
 				parsefloat = imagebase + parsefloat
 				
 				# next, find the first reference to the pointer to 'parseFloat'
+				# WinDbg:  s -d JavaScriptCore Lffffff XXXXXXXX 
 				parsefloat = @mem[pid][ imagebase, 0xFFFFFF ].index( [parsefloat].pack('V') )
 				if( not parsefloat )
 					print_error( "Unable to resolved JavaScriptCore!parseFloat (2)" )
@@ -139,10 +142,10 @@ module Grinder
 				proxy = Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
-					mov eax, [esp+0x04+0x24] ; grab the pointer to the target object
+					mov eax, [esp+0x0C+0x24] ; grab the pointer to the target object
 					test eax, eax
 					jz passthru_abort
-					cmp dword [eax], 0x00000100 ; check it is the correct type
+					cmp dword [eax], 0x00000004 ; check it is the correct type
 					jne passthru_abort
 					mov eax, [eax+0x08] ; pull out the pointer to the data
 

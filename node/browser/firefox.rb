@@ -25,6 +25,27 @@ module Grinder
 				return 'http://symbols.mozilla.org/firefox'
 			end
 			
+			@@cached_major_version = -1
+			@@cached_minor_version = -1
+			
+			def ff_version
+				begin
+					if( @@cached_major_version != -1 )
+						return true
+					end
+					pe = Metasm::PE.decode_file_header( FireFox.target_exe )
+					version = pe.decode_version
+					if( version['FileVersion'] )
+						result = version['FileVersion'].scan( /(\d*).(\d*)/ )
+						@@cached_major_version = result.first[0].to_i
+						@@cached_minor_version = result.first[1].to_i
+						return true
+					end
+				rescue
+				end
+				return false
+			end
+			
 			def loaders( pid, path, addr )
 				if( path.include?( 'mozjs' ) )
 					@browser = 'FF'
@@ -40,6 +61,11 @@ module Grinder
 				
 				if( not @attached[pid].logmessage or not @attached[pid].finishedtest )
 					print_error( "Unable to hook JavaScript parseFloat() in process #{pid}, logger dll not injected." )
+					return false
+				end
+				
+				if( not ff_version )
+					print_error( "Unable to determind FireFox version for hooking." )
 					return false
 				end
 				
@@ -101,13 +127,34 @@ module Grinder
 				
 				proxy_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, 1024, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
 				
+				fixup      = ''
+				
+				if( @@cached_major_version == 18 ) # Tested against FF 18.0
+					fixup = %Q{
+						test ebx, ebx
+						jz passthru_end2
+						mov eax, ebx
+					}
+				elsif( @@cached_major_version == 17 ) # Tested against FF 17.0.1
+					fixup = %Q{
+						test edi, edi
+						jz passthru_end2
+						mov eax, [edi+4]
+					}
+				else
+					fixup = %Q{
+						test edi, edi
+						jz passthru_end2
+						mov eax, edi
+					}
+				end
+				
 				# we hook inside the function (not the prologue) after a call to resolve the string parameter...
 				proxy = Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
-					test edi, edi
-					jz passthru_end2
-					mov eax, [edi+4]
+					
+					#{ fixup }
 					
 					mov ebx, [eax]
 					lea eax, [eax+4]
@@ -118,26 +165,26 @@ module Grinder
 					push dword [eax]
 					lea eax, [eax+4]
 					push eax
-					mov edi, 0x#{'%08X' % @attached[pid].logmessage2 }
+					mov edi, 0x#{ '%08X' % @attached[pid].logmessage2 }
 					call edi
 					pop eax
 					jmp passthru_end
 				passthru1:
 					cmp ebx, 0xDEADC0DE
 					jne passthru2
-					mov edi, 0x#{'%08X' % @attached[pid].logmessage }
+					mov edi, 0x#{ '%08X' % @attached[pid].logmessage }
 					call edi
 					jmp passthru_end
 				passthru2:
 					cmp ebx, 0xDEADF00D
 					jne passthru3
-					mov edi, 0x#{'%08X' % @attached[pid].finishedtest }
+					mov edi, 0x#{ '%08X' % @attached[pid].finishedtest }
 					call edi
 					jmp passthru_end
 				passthru3:
 					cmp ebx, 0xDEADBEEF
 					jne passthru4
-					mov edi, 0x#{'%08X' % @attached[pid].startingtest }
+					mov edi, 0x#{ '%08X' % @attached[pid].startingtest }
 					call edi
 				passthru4:
 					cmp ebx, 0xDEADDEAD

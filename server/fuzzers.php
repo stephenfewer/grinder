@@ -126,6 +126,8 @@
 						$chart_value1 .= ']';
 						$chart_value2 .= ']';
 						
+						// SELECT target, COUNT(DISTINCT hash_quick) FROM crashes WHERE fuzzer<>'' GROUP BY target ASC;
+						
 						$series_labels = "[ {label:'Unique Crashes'}, {label:'Total Crashes'} ]";
 
 						$chart_width = ( ( 60 * 2 ) * mysql_num_rows( $result2 ) ) + 200;

@@ -70,8 +70,8 @@ function LOGGER( name )
 		}
 		else
 		{
-		    for( i=0; i < 10000; i++ )
-				var s = new String( unescape( '%u7F7F%u7F7F' ) );
+		    //for( i=0; i < 10000; i++ )
+			//	var s = new String( unescape( '%u7F7F%u7F7F' ) );
 		}
 	};
 	

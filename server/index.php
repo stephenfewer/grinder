@@ -329,14 +329,14 @@
 		<div id="error-message"></div>
 		
 		<div id="about-message">
-			<p>Version: 0.4-Dev</p>
+			<p>Version: 0.4</p>
 			<p>Author: Stephen Fewer of Harmony Security (<a href='http://www.harmonysecurity.com/' target='_blank'>www.harmonysecurity.com</a>)</p>
 			<p>Source Code: <a href='https://github.com/stephenfewer/grinder' target='_blank'>github.com/stephenfewer/grinder</a></p>
 		</div>
 		
 		<center>
 			<div id='footer'>
-				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.4-Dev</a>
+				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.4</a>
 			</div>
 		</center>
 		

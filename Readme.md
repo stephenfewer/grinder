@@ -86,7 +86,7 @@ https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node
 
 For a quick start, the steps for installing a node are as follows:
 
-* Install the latest stable version of Ruby (www.ruby-lang.org).
+* Install Ruby 1.9.3 (www.ruby-lang.org). (Please Note: Ruby 2.0 is not yet supported).
 
 * Copy '.\grinder\node\data\grinder_logger.dll' to 'c:\windows\system32\' (Or 'c:\windows\syswow64\' on an x64 system)
 

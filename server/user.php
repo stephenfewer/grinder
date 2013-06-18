@@ -5,7 +5,7 @@
 	
 	function user_isloggedin()
 	{
-		if( session_is_registered( 'id' ) and session_is_registered( 'username' ) and session_is_registered( 'grinderkey' ) )
+		if( isset( $_SESSION['id'] ) and isset( $_SESSION['username'] ) and isset( $_SESSION['grinderkey'] ) )
 		{
 			if( $_SESSION['grinderkey'] == GRINDER_KEY )
 				return true;
@@ -15,7 +15,7 @@
 	
 	function user_isadministrator()
 	{
-		if( user_isloggedin() and session_is_registered( 'type' ) and $_SESSION['type'] == 0 )
+		if( user_isloggedin() and isset( $_SESSION['type'] ) and $_SESSION['type'] == 0 )
 			return true;
 		return false;
 	}

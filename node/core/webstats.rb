@@ -77,7 +77,7 @@ module Grinder
 				
 				response = _send_request2( params )
 				
-				if( response.code.to_i == 200 )
+				if( response and response.code.to_i == 200 )
 					if( response['duplicate'] and ( response['duplicate'] =~ /1|yes|true/i ) )
 						return true
 					end
@@ -91,8 +91,8 @@ module Grinder
 			def _send_request1( params )
 			
 				response = _send_request2( params )
-			
-				if( response.code.to_i == 200 )
+
+				if( response and response.code.to_i == 200 )
 					return true
 				end
 				
@@ -119,8 +119,14 @@ module Grinder
 				
 				request.set_form_data( params )
 				
-				response = http.request( request )
-
+				response = nil
+				
+				begin
+					response = http.request( request )
+				rescue Errno::ETIMEDOUT
+					print_error( "Timeout requesting '#{uri}'." )
+				end
+				
 				return response
 
 			end

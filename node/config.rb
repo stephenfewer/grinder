@@ -78,7 +78,7 @@ $internetexplorer_exe     = 'C:\\%PROGRAM_FILES_32%\\Internet Explorer\\iexplore
 $internetexplorer_logmods = [ 'mshtml.dll', 'iepeers.dll', 'urlmon.dll', 'msxml3.dll','jscript.dll', 'jscript9.dll', 'ieframe.dll' ]
 
 # Configure the chrome browser...
-$chrome_exe               = 'C:\\Users\\%USERNAME%\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+$chrome_exe               = 'C:\\%PROGRAM_FILES_32%\\Google\\Chrome\\Application\\chrome.exe'
 
 # Configure the firefox browser...
 $firefox_exe              = 'C:\\%PROGRAM_FILES_32%\\Mozilla Firefox\\firefox.exe'

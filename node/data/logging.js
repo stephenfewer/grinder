@@ -56,17 +56,21 @@ function LOGGER( name )
 	
 	this.gc = function()
 	{
-		var i;
 		if( this.browser == 'IE' )
 		{
 			CollectGarbage();
 		}
 		else if( this.browser == 'CM' )
 		{
-			p = [];
-			q = Array( 100 ).join( unescape( '%u7F7F' ) );
-			for( i=25000; i > 0 ; i-- ) 
-				p.push( new String( q ) );
+			if( typeof window.gc != 'undefined' )
+			{
+				window.gc();
+			}
+			else
+			{
+				for( f=[], i=0 ; i<30000 ; i++ )
+					f.push( new String( "ABCD" ) );
+			}
 		}
 		else
 		{

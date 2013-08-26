@@ -203,11 +203,11 @@ class Grinder
 					end
 				end
 			end
+			
 			# block for the debugger to either exit due to a crash or to be killed by the above kill_thread
-
 			begin
 				::Process.wait( $debugger_pid )
-			rescue ::Errno::ESRCH, Errno::ECHILD
+			rescue ::Errno::ESRCH, Errno::ECHILD, Errno::EINVAL
 			end
 			
 			$debugger_pid = nil

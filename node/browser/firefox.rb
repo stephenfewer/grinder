@@ -80,6 +80,16 @@ module Grinder
 				
 				print_status( "Resolved #{symbol} @ 0x#{'%08X' % parsefloat }" )
 
+				symbol = 'mozjs!js_strtod'
+				
+				js_strtod = @attached[pid].name2address( imagebase, 'mozjs.dll', symbol )
+				if( not js_strtod )
+					print_error( "Unable to resolved #{symbol}" )
+					return false
+				end
+				
+				print_status( "Resolved #{symbol} @ 0x#{'%08X' % js_strtod }" )
+
 				cpu        = Metasm::Ia32.new
 				
 				code       = @mem[pid][parsefloat,512]
@@ -88,13 +98,15 @@ module Grinder
 				
 				patch_size = 0
 				
-				# we first disassemble the function looking for the first call (to mozjs!js_strtod)
+				# we first disassemble the function looking for the first call to mozjs!js_strtod.
 				# once found we want to place out hook after this function call as it
 				# resolves the input parameter to its unicode string for us. We then
 				# calculate the number of instructions after the call which we will
 				# overwrite (to avoid munging half an instruction)
 				
 				eip = parsefloat
+				
+				js_strtod_string_reg = nil
 				
 				# Note: We dont use "Metasm::Shellcode.disassemble( cpu, code ).decoded.each_value do | di |"
 				# as this will follow conditional jumps and we need a simple linear disassembly
@@ -105,11 +117,18 @@ module Grinder
 					
 					code = code[ di.bin_length, code.length ]
 					
-					if( not found and di.opcode.name.downcase == 'call' ) # XXX: we should sanity check this is actually for mozjs!js_strtod
-						parsefloat = di.address + di.bin_length
-						found = true
+					if( not found and di.opcode.name.downcase == 'push' ) 
+						js_strtod_string_reg = di.instruction.args[0].to_s.downcase
+					elsif( not found and di.opcode.name.downcase == 'call' ) 
+						# check this is a call to mozjs!js_strtod
+						if( di.instruction.args[0].to_s.to_i(16) == js_strtod )
+							parsefloat = di.address + di.bin_length
+							found = true
+							# js_strtod_string_reg will now be the last push param before the call to js_strtod
+						end
 						next
 					end
+					
 					if( found )
 						break if patch_size >= 5
 						patch_size += di.bin_length
@@ -129,7 +148,15 @@ module Grinder
 				
 				fixup      = ''
 				
-				if( @@cached_major_version == 18 ) # Tested against FF 18.0
+				if( @@cached_major_version == 23 ) # Tested against FF 23.0.1
+					js_strtod_string_reg = 'esi' if not js_strtod_string_reg
+					
+					fixup = %Q{
+						test #{js_strtod_string_reg}, #{js_strtod_string_reg}
+						jz passthru_end2
+						mov eax, #{js_strtod_string_reg}
+					}
+				elsif( @@cached_major_version == 18 ) # Tested against FF 18.0
 					fixup = %Q{
 						test ebx, ebx
 						jz passthru_end2

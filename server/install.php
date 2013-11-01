@@ -58,6 +58,16 @@
 			return false;
 		}
 		
+		// add an index to crashes for hash_quick to get a perf boost (credit: Jason Kratzer).
+		$table_crashes_index_sql = "ALTER TABLE crashes ADD INDEX (hash_quick);";
+		
+		$result = mysql_query( $table_crashes_index_sql );
+		if( $result == false )
+		{
+			echo "Failed (" . htmlentities( mysql_error() ) . ").</p>";
+			return false;
+		}
+		
 		$table_nodes_sql = "CREATE TABLE IF NOT EXISTS nodes (
 			name varchar(32) NOT NULL,
 			crashes int(11) NOT NULL DEFAULT 0,

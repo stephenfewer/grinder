@@ -177,6 +177,24 @@
 		return $success;
 	}
 
+	// Here we place any routines that must run to update an old version of the DB to the current expected schema.
+	function update_db()
+	{
+		// If index doesn't exist, add an index to crashes for hash_quick to get a perf boost (credit: Jason Kratzer).
+		$result1 = mysql_query( "SELECT * FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'crashes' AND COLUMN_NAME = 'hash_quick';" );
+		if( $result1 )
+		{
+			if( mysql_num_rows( $result1 ) == 0 )
+			{
+				$result2 = mysql_query( "ALTER TABLE crashes ADD INDEX (hash_quick);" );
+				if( $result2 )
+					mysql_free_result( $result2 );
+			}
+			
+			mysql_free_result( $result1 );
+		}
+	}
+	
 	function user_login( $username, $password )
 	{
 		$success = false;
@@ -205,6 +223,8 @@
 					mysql_free_result( $result2 );
 					
 				$success = true;
+
+				update_db();
 			}
 			
 			mysql_free_result( $result );

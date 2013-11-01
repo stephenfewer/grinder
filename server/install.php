@@ -48,7 +48,9 @@
 			notes text NOT NULL,
 			log_data mediumblob NOT NULL,
 			crash_data mediumblob NOT NULL,
-			PRIMARY KEY (id)
+			PRIMARY KEY (id),
+			UNIQUE KEY id (id),
+			KEY hash_quick (hash_quick)
 		);";
 			
 		$result = mysql_query( $table_crashes_sql );
@@ -57,17 +59,7 @@
 			echo "Failed (" . htmlentities( mysql_error() ) . ").</p>";
 			return false;
 		}
-		
-		// add an index to crashes for hash_quick to get a perf boost (credit: Jason Kratzer).
-		$table_crashes_index_sql = "ALTER TABLE crashes ADD INDEX (hash_quick);";
-		
-		$result = mysql_query( $table_crashes_index_sql );
-		if( $result == false )
-		{
-			echo "Failed (" . htmlentities( mysql_error() ) . ").</p>";
-			return false;
-		}
-		
+				
 		$table_nodes_sql = "CREATE TABLE IF NOT EXISTS nodes (
 			name varchar(32) NOT NULL,
 			crashes int(11) NOT NULL DEFAULT 0,
@@ -431,7 +423,7 @@
 				{
 					echo "<h3>Welcome</h3>
 							<div style='margin-left:30px;'>
-								<p>Welcome to the Grinder installer. Please create a MySQL database and associated user before continuing. The database user must have SELECT, UPDATE, CREATE, DELETE and INSERT privileges. The Grinder Key below must match that of your Grinder Nodes.</p>
+								<p>Welcome to the Grinder installer. Please create a MySQL database and associated user before continuing. The database user must have SELECT, UPDATE, CREATE, DELETE, ALTER and INSERT privileges. The Grinder Key below must match that of your Grinder Nodes.</p>
 							</div>
 							
 							<h3>Settings</h3>

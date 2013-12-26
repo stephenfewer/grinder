@@ -314,7 +314,7 @@
 							
 								<p>Please login to the system.</p>
 								<div style='margin-left:30px;'>
-									<p>Username: <input id='username' value=''></input></p>
+									<p>Username: <input id='username' value='' autofocus='autofocus'></input></p>
 									<p>Password: <input id='password' type='password' value=''></input></p>
 									<button id='login_button'>Login...</button>
 								</div>

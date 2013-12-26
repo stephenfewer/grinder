@@ -175,8 +175,7 @@
 						$.cookie( 'grinder-tab', ui.index, { expires: 31 } );
 					},
 					selected: $.cookie( 'grinder-tab' ) ? parseInt( $.cookie( 'grinder-tab' ) ) : 0
-				} );
-
+				} );				
 				$( "#login_button" ).button().click( function() {
 				
 					if( getUsername().length == 0  )
@@ -206,7 +205,11 @@
 							location.href = location.href;
 					});
 				} );
-				
+				$( "#password" ).keypress(function(e) {
+					if(e.which == 13) {
+						$( "#login_button" ).button().click();
+					}
+				});				
 				$( "#logout_button" ).button( { icons: { primary: "ui-icon-eject" } } ).click( function() {
 					$.post( 'index.php', { action:'logout' }, function( data ) {
 						location.href = location.href.substr( 0, location.href.indexOf( '#', 0 ) );

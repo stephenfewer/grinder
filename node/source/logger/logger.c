@@ -1,6 +1,6 @@
 /*
 *
-* Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+* Copyright (c) 2013, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 * Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 * Source code located at https://github.com/stephenfewer/grinder
 *
@@ -163,6 +163,8 @@ VOID logMessage( wchar_t * cpMessageW )
 		dwLengthW = wcslen( cpMessageW ) + 1;
 
 		dwLengthA = WideCharToMultiByte( CP_ACP, 0, cpMessageW, dwLengthW, 0, 0, NULL, NULL );
+		if( dwLengthA == 0 )
+			break;
 
 		if( dwLengthA > dwLogMessageSize )
 		{
@@ -197,19 +199,17 @@ VOID logMessage( wchar_t * cpMessageW )
 		if( !hLog )
 			break;
 
-		dwTotal    = 0;
-		
-		dwWritten  = 0;
-
 		dwLengthA -= 1;
 
-		while( dwTotal < dwLengthA )
+		for( dwTotal=0 ;  dwTotal < dwLengthA ; )
 		{
 			if( !WriteFile( hLog, (LPCVOID)((BYTE *)(cpLogMessage + dwTotal)), (dwLengthA - dwTotal), &dwWritten, NULL ) )
 				break;
 
 			dwTotal += dwWritten;
 		}
+
+		FlushFileBuffers( hLog );
 
 	} while( 0 );
 

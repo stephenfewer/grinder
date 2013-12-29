@@ -166,7 +166,7 @@ VOID logMessage( wchar_t * cpMessageW )
 		if( dwLengthA == 0 )
 			break;
 
-		if( dwLengthA > dwLogMessageSize )
+		if( dwLengthA >= dwLogMessageSize )
 		{
 			if( cpLogMessage )
 			{

@@ -176,6 +176,18 @@
 				offset = o;		
 				refreshTab( 1 );
 			}
+
+			function _jump( pageNum, maxOffset )
+			{
+				if ( typeof pageNum === "number" && pageNum <= maxOffset) {
+					_offset( pageNum );
+					return false
+				}
+				else {
+					alert("Invalid value!");
+					return false
+				}
+			}
 			
 			function _crash_click( _id, _hash )
 			{
@@ -506,7 +518,8 @@
 								$current_page = intval( $offset / $limit ) + 1;
 								
 								echo "<p>";
-
+								echo "<form onsubmit='return _jump((document.getElementById(\"pageNumber\").value - 1) * " . htmlentities( $limit, ENT_QUOTES ) . ", " . htmlentities( ( $total_pages - 1 ) * $limit, ENT_QUOTES ) . ");'>";
+								
 								if( $current_page > 1 )
 								{
 									echo "<a title='Go to the first page' href='javascript:_offset(0);'>&lt;&lt;</a> ";
@@ -529,6 +542,10 @@
 									echo "&gt; &gt;&gt;";
 								}	
 								
+								echo "<br>Jump To Page: ";
+								echo "<input id='pageNumber' type='text' size='5'/>";
+								echo "<input type='submit' style='visibility: collapse;' />";
+								echo "</form>";
 								echo "</p>";
 								
 								mysql_free_result( $result );

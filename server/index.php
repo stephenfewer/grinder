@@ -252,15 +252,15 @@
 					height: 600,
 					modal: true,
 					buttons: {
-						//Delete: function() {
-						//	deleteCrash();
-						//},
 						Update: function() {
 							updateCrash();
 						},
 						Cancel: function() {
 							$( this ).dialog( "close" );
-						}
+						},
+						Delete: function() {
+							deleteCrash();
+						}				
 					}
 					
 				});

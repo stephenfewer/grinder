@@ -196,7 +196,7 @@ module Grinder
 				proxy = Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
-					mov eax, [esp+0x38+0x24]
+					mov eax, [esp+0x34+0x24]
 					
 					mov ebx, [eax]
 					lea eax, [eax+4]

@@ -148,7 +148,7 @@ module Grinder
 				
 				fixup      = ''
 				
-				if( @@cached_major_version == 23 ) # Tested against FF 23.0.1
+				if( @@cached_major_version >= 23 ) # Tested against FF 23.0.1 an FF 26.0
 					js_strtod_string_reg = 'esi' if not js_strtod_string_reg
 					
 					fixup = %Q{

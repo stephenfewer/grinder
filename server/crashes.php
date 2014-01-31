@@ -399,14 +399,19 @@
 					<?php
 						$total = 0;
 						$limit = 25;
+						$where_count = 0;
 						
 						$sql = "";
-						if( $filter_unique and !$display_owner )
-							$sql = "SELECT id, hash_quick, hash_full, verified, node, target, fuzzer, type, time, count, SUM(count) FROM crashes";
+						if( $filter_unique and !$display_owner ) 
+						{
+						$sql = "SELECT t1.id, t1.hash_quick, t1.hash_full, t1.verified, t1.node, t1.target, t1.fuzzer, t1.type, t1.time, t2.count, total FROM crashes as t1, ";
+						$sql .= "(SELECT MAX(verified) as maxverified, hash_quick, count, SUM(count) as total from crashes GROUP BY hash_quick) as t2 ";
+						$sql .= "WHERE t1.hash_quick = t2.hash_quick and t1.verified = t2.maxverified";
+						$where_count = 1;
+						}
 						else
 							$sql = "SELECT id, hash_quick, hash_full, verified, node, target, fuzzer, type, time, count FROM crashes";
 						
-						$where_count = 0;
 						if( $display_owner )
 						{
 							$where_count = 1;
@@ -443,7 +448,7 @@
 							$sql .= " GROUP BY hash_quick";
 							
 						if( $orders[ $order_index ] == 'count' and $filter_unique )
-							$sql .= " ORDER BY SUM(count)";
+							$sql .= " ORDER BY total";
 						else
 							$sql .= " ORDER BY " . $orders[ $order_index ] . "";
 
@@ -480,10 +485,10 @@
 											echo "class='crash_unknown'";
 											break;
 										case 1:
-											echo "class='crash_interesting'";
+											echo "class='crash_uninteresting'";
 											break;
 										case 2:
-											echo "class='crash_uninteresting'";
+											echo "class='crash_interesting'";
 											break;
 										case 3:
 											echo "class='crash_exploitable'";
@@ -500,13 +505,13 @@
 									echo "<td>" . htmlentities( $row['type'], ENT_QUOTES ) . "</td>";
 									// small bug here whereby we dont place a * when their are two or more different major crashes (withmatching minor)
 									// but one of the unique crashes has more then one instance (logik fail: intval( $row['count'] ) == 1 )
-									if( isset( $row['SUM(count)'] ) and intval( $row['SUM(count)'] ) > 1 and intval( $row['count'] ) == 1 )
+									if( isset( $row['total'] ) and intval( $row['total'] ) > 1 and intval( $row['count'] ) == 1 )
 										echo "<td>" . htmlentities( $row['hash_quick'], ENT_QUOTES ) . ".*</td>";
 									else
 										echo "<td>" . htmlentities( $row['hash_quick'], ENT_QUOTES ) . "." . htmlentities( $row['hash_full'], ENT_QUOTES ) . "</td>";
 									echo "<td>" . htmlentities( $row['time'], ENT_QUOTES ) . "</td>";
-									if( isset( $row['SUM(count)'] ) )
-										echo "<td>" . htmlentities( $row['SUM(count)'], ENT_QUOTES ) . "</td>";
+									if( isset( $row['total'] ) )
+										echo "<td>" . htmlentities( $row['total'], ENT_QUOTES ) . "</td>";
 									else
 										echo "<td>" . htmlentities( $row['count'], ENT_QUOTES ) . "</td>";
 									echo "</tr>";

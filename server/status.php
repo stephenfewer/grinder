@@ -10,8 +10,8 @@
 	require_once 'config.php';
 	
 	$verified_unknown       = 0;
-	$verified_interesting   = 1;
-	$verified_uninteresting = 2;
+	$verified_uninteresting = 1;
+	$verified_interesting   = 2;
 	$verified_exploitable   = 3;
 	
 	function update_node_crash_status( $node, $time )

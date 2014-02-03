@@ -306,8 +306,8 @@
 				<tr><td>Verified: 
 					<select id='crash_verified'>
 						<option <?php if( $verified == 0 ){ echo 'selected="selected"'; } ?> >Unknown</option>
-						<option <?php if( $verified == 1 ){ echo 'selected="selected"'; } ?> >Interesting</option>
-						<option <?php if( $verified == 2 ){ echo 'selected="selected"'; } ?> >Uninteresting</option>
+						<option <?php if( $verified == 1 ){ echo 'selected="selected"'; } ?> >Uninteresting</option>
+						<option <?php if( $verified == 2 ){ echo 'selected="selected"'; } ?> >Interesting</option>
 						<option <?php if( $verified == 3 ){ echo 'selected="selected"'; } ?> >Exploitable</option>
 					</select></td>
 					

@@ -19,8 +19,8 @@ module Grinder
 			JOB_REDUCTION          = 'reduction'
 			
 			VERIFIED_UNKNOWN       = 0
-			VERIFIED_INTERESTING   = 1
-			VERIFIED_UNINTERESTING = 2
+			VERIFIED_UNINTERESTING = 1
+			VERIFIED_INTERESTING   = 2
 			VERIFIED_EXPLOITABLE   = 3
 			
 			def initialize( node, baseurl, key, username=nil, password=nil, https=false )

@@ -36,7 +36,7 @@ Most opcodes are available in the framework, with the notable exception of:
 
 * most sse2 simd instructions
 * the AVX instructions
-* amd-specific instructions (`syscall`)
+* amd-specific instructions
 
 The `386_common` family is the subset of 386 instruction that are most
 commonly found in standard usermode programs (no `in`/`out`/bcd
@@ -121,7 +121,7 @@ The pointer itself can be:
 * `[eax + 4*ebx]` (base + 1,2,4 or 8 * index)
 * `[eax + 2*ebx + 42]` (both)
 
-Note that the form base + index cannot use `esp` as index.
+Note that the form base + s*index cannot use `esp` as index with s != 1.
 
 For indirection sizes, the size is taken from the size of other arguments
 if it is not specified (eg `mov eax, [42]` will be 4 bytes, and `mov al, [42]`
@@ -165,6 +165,8 @@ The following prefixes are handled:
 * `lock`
 * `rep`, `repz`, `repnz`, `repe`, `repne`
 * `code16`, `code32`
+* `hintjmp`, `hintnojmp` (aliases: `ht`, `hnt`)
+* `seg_cs` ... `seg_gs`
 
 The `repXX` prefixes are for string operations (`movsd` etc), but will be set
 for any opcode. Only the last of the family will be encoded.
@@ -177,11 +179,11 @@ independantly of the global CPU mode. For exemple,
 will generate `"\xb8\x42\x00"` (no opsz override prefix), and will decode or
 run incorrectly on an 32bit CPU.
 
-The encoder also has code to handle `jmp hints` prefixes, but the parser has
-no equivalent prefix support.
+The `hintjmp` prefix is useful for conditional jumps to give a hint to the
+CPU branch predictor as to whether the branch is take or not.
 
-There is currently no way to specify a segment-override prefix for instruction
-not using a ModRM argument. Use a `db 26h` style line.
+The `seg_cs` prefix family is used to declare arbitrary segment override.
+These should be used only in instructions with no ModRM argument.
 
 
 Suffixes
@@ -202,7 +204,7 @@ displacement this is necessary.
   or.i8 eax, 1	; "\x83\xc8\x01" (same, shortest encoding)
   or.i eax, 1   ; "\x81\xc8\x01\x00\x00\x00" (constant stored in a 32bit field)
   movsd.a16	; use a 16-byte address-size override prefix (copy dword [si] to [di])
-  push.i16 42h  ; push a 16-bit integer (using sp)
+  push.i16 42h  ; push a 16-bit integer
 
 The suffixes are available as follow:
 

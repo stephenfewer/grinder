@@ -5,6 +5,7 @@
 
 
 require 'metasm/os/main'
+require 'metasm/debug'
 
 module Metasm
 class PTrace
@@ -13,71 +14,162 @@ class PTrace
 	def self.open(target)
 		ptrace = new(target)
 		return ptrace if not block_given?
-		ret = yield ptrace
-		ptrace.detach
-		ret
+		begin
+			yield ptrace
+		ensure
+			ptrace.detach
+		end
+	end
+
+	# calls PTRACE_TRACEME on the current (ruby) process
+	def self.traceme
+		new(::Process.pid, false).traceme
 	end
 
 	# creates a ptraced process (target = path)
 	# or opens a running process (target = pid)
-	def initialize(target)
-		begin
+	# values for do_attach:
+	#  :create => always fork+traceme+exec+wait
+	#  :attach => always attach
+	#  false/nil => same as attach, without actually calling PT_ATTACH (useful when the ruby process is already tracing pid)
+	#  default/anything else: try to attach if pid is numeric, else create
+	def initialize(target, do_attach=true, &b)
+		case do_attach
+		when :create
+			init_create(target, &b)
+		when :attach
+			init_attach(target)
+		when :dup
+			raise ArgumentError unless target.kind_of?(PTrace)
+			@pid = target.pid
+			tweak_for_pid(@pid, target.tgcpu)		# avoid re-parsing /proc/self/exe
+		when nil, false
 			@pid = Integer(target)
 			tweak_for_pid(@pid)
-			attach
-		rescue ArgumentError, TypeError
-			did_exec = true
-			if not @pid = fork
-				tweak_for_pid(::Process.pid)
-				traceme
-				Process.exec(*target)
-				exit!(0)
-			end
+		else
+			t = begin; Integer(target)
+			    rescue ArgumentError, TypeError
+			    end
+			t ? init_attach(t) : init_create(target, &b)
+		end
+	end
+
+	def init_attach(target)
+		@pid = Integer(target)
+		tweak_for_pid(@pid)
+		attach
+		wait
+		puts "Ptrace: attached to #@pid" if $DEBUG
+	end
+
+	def init_create(target, &b)
+		if not @pid = ::Process.fork
+			tweak_for_pid(::Process.pid)
+			traceme
+			b.call if b
+			::Process.exec(*target)
+			exit!(0)
 		end
 		wait
 		raise "could not exec #{target}" if $?.exited?
-		tweak_for_pid(@pid) if did_exec
-		puts "Ptrace: attached to #@pid" if $DEBUG
+		tweak_for_pid(@pid)
+		puts "Ptrace: attached to new #@pid" if $DEBUG
 	end
 
 	def wait
 		::Process.wait(@pid, ::Process::WALL)
 	end
 
-	attr_accessor :reg_off, :intsize, :syscallnr
-	# setup the variables according to the target
-	# XXX when x86 debugs x64, should we use ptrace_X86_ATTACH or X64_ATTACH ?
-	def tweak_for_pid(pid=@pid)
-		tg = OS.current.open_process(::Process.pid)
-		psz = tg.addrsz
-		case psz
-		when 32
+	attr_accessor :reg_off, :intsize, :syscallnr, :syscallreg
+	attr_accessor :packint, :packuint, :host_intsize, :host_syscallnr
+	attr_accessor :tgcpu
+	@@sys_ptrace = {}
+
+	# setup variables according to the target (ptrace interface, syscall nrs, ...)
+	def tweak_for_pid(pid=@pid, tgcpu=nil)
+		# use these for our syscalls PTRACE
+		@@host_csn ||= LinOS.open_process(::Process.pid).cpu.shortname
+		case @@host_csn
+		when 'ia32'
 			@packint = 'l'
 			@packuint = 'L'
 			@host_intsize = 4
-			@host_syscallnr = SYSCALLNR
+			@host_syscallnr = SYSCALLNR_I386
 			@reg_off = REGS_I386
-		when 64
+		when 'x64'
 			@packint = 'q'
 			@packuint = 'Q'
 			@host_intsize = 8
-			@host_syscallnr = SYSCALLNR_64
+			@host_syscallnr = SYSCALLNR_X86_64
 			@reg_off = REGS_X86_64
 		else raise 'unsupported architecture'
 		end
 
-		case OS.current.open_process(pid).addrsz
-		when 32
-			@syscallnr = SYSCALLNR
+		@tgcpu = tgcpu || LinOS.open_process(pid).cpu
+		# use these to interpret the child state
+		case @tgcpu.shortname
+		when 'ia32'
+			@syscallreg = 'ORIG_EAX'
+			@syscallnr = SYSCALLNR_I386
 			@intsize = 4
-		when 64
-			@syscallnr = SYSCALLNR_64
+		when 'x64'
+			@syscallreg = 'ORIG_RAX'
+			@syscallnr = SYSCALLNR_X86_64
 			@intsize = 8
 		else raise 'unsupported target architecture'
 		end
 
+		# buffer used in ptrace syscalls
 		@buf = [0].pack(@packint)
-		@bufptr = [@buf].pack('P').unpack(@packint).first
+
+		@sys_ptrace = @@sys_ptrace[@host_syscallnr['ptrace']] ||= setup_sys_ptrace(@host_syscallnr['ptrace'])
+	end
+
+	def setup_sys_ptrace(sysnr)
+		moo = Class.new(DynLdr)
+		case @@host_csn
+		when 'ia32'
+			# XXX compat lin2.4 ?
+			asm = <<EOS
+#define off 3*4
+push ebx
+push esi
+mov eax, #{sysnr}
+mov ebx, [esp+off]
+mov ecx, [esp+off+4]
+mov edx, [esp+off+8]
+mov esi, [esp+off+12]
+call gs:[10h]
+pop esi
+pop ebx
+ret
+EOS
+		when 'x64'
+			asm = <<EOS
+#define off 3*8
+mov rax, #{sysnr}
+//mov rdi, rdi
+//mov rsi, rdi
+//mov rdx, rdx
+mov r10, rcx
+syscall
+ret
+EOS
+		else raise 'unsupported target architecture'
+		end
+
+		moo.new_func_asm 'long ptrace(unsigned long, unsigned long, unsigned long, unsigned long)', asm
+		moo
+	end
+
+	def host_csn; @@host_csn end
+
+	def dup
+		self.class.new(self, :dup)
+	end
+
+	def str_ptr(str)
+		[str].pack('P').unpack(@packint).first
 	end
 
 	# interpret the value turned as an unsigned long
@@ -105,6 +197,7 @@ class PTrace
 	end
 
 	def writemem(off, str)
+		str.force_encoding('binary') if str.respond_to?(:force_encoding)
 		decal = off % @host_intsize
 		if decal > 0
 			off -= decal
@@ -121,29 +214,30 @@ class PTrace
 			pokedata(off+i, str[i, @host_intsize])
 			i += @host_intsize
 		end
+		true
 	end
 
 	# linux/ptrace.h
 	COMMAND = {
-		'TRACEME'         =>   0, 'PEEKTEXT'        =>   1,
-		'PEEKDATA'        =>   2, 'PEEKUSR'         =>   3,
-		'POKETEXT'        =>   4, 'POKEDATA'        =>   5,
-		'POKEUSR'         =>   6, 'CONT'            =>   7,
-		'KILL'            =>   8, 'SINGLESTEP'      =>   9,
-		'ATTACH'          =>  16, 'DETACH'          =>  17,
-		'SYSCALL'         =>  24,
+		:TRACEME         =>   0, :PEEKTEXT        =>   1,
+		:PEEKDATA        =>   2, :PEEKUSR         =>   3,
+		:POKETEXT        =>   4, :POKEDATA        =>   5,
+		:POKEUSR         =>   6, :CONT            =>   7,
+		:KILL            =>   8, :SINGLESTEP      =>   9,
+		:ATTACH          =>  16, :DETACH          =>  17,
+		:SYSCALL         =>  24,
 
-		# i486-asm/ptrace.h
-		'GETREGS'         =>  12, 'SETREGS'         =>  13,
-		'GETFPREGS'       =>  14, 'SETFPREGS'       =>  15,
-		'GETFPXREGS'      =>  18, 'SETFPXREGS'      =>  19,
-		'OLDSETOPTIONS'   =>  21, 'GET_THREAD_AREA' =>  25,
-		'SET_THREAD_AREA' =>  26, 'ARCH_PRCTL'      =>  30,
-		'SYSEMU'          =>  31, 'SYSEMU_SINGLESTEP'=> 32,
-		'SINGLEBLOCK'     =>  33,
+		# arch/x86/include/ptrace-abi.h
+		:GETREGS         =>  12, :SETREGS         =>  13,
+		:GETFPREGS       =>  14, :SETFPREGS       =>  15,
+		:GETFPXREGS      =>  18, :SETFPXREGS      =>  19,
+		:OLDSETOPTIONS   =>  21, :GET_THREAD_AREA =>  25,
+		:SET_THREAD_AREA =>  26, :ARCH_PRCTL      =>  30,
+		:SYSEMU          =>  31, :SYSEMU_SINGLESTEP=> 32,
+		:SINGLEBLOCK     =>  33,
 		# 0x4200-0x4300 are reserved for architecture-independent additions.
-		'SETOPTIONS'      => 0x4200, 'GETEVENTMSG'   => 0x4201,
-		'GETSIGINFO'      => 0x4202, 'SETSIGINFO'    => 0x4203
+		:SETOPTIONS      => 0x4200, :GETEVENTMSG   => 0x4201,
+		:GETSIGINFO      => 0x4202, :SETSIGINFO    => 0x4203
 	}
 
 	OPTIONS = {
@@ -151,14 +245,15 @@ class PTrace
 		'TRACESYSGOOD'  => 0x01, 'TRACEFORK'     => 0x02,
 		'TRACEVFORK'    => 0x04, 'TRACECLONE'    => 0x08,
 		'TRACEEXEC'     => 0x10, 'TRACEVFORKDONE'=> 0x20,
-		'TRACEEXIT'     => 0x40
+		'TRACEEXIT'     => 0x40, 'TRACESECCOMP'  => 0x80,
 	}
 
 	WAIT_EXTENDEDRESULT = {
 		# Wait extended result codes for the above trace options.
 		'EVENT_FORK'       => 1, 'EVENT_VFORK'      => 2,
 		'EVENT_CLONE'      => 3, 'EVENT_EXEC'       => 4,
-		'EVENT_VFORK_DONE' => 5, 'EVENT_EXIT'       => 6
+		'EVENT_VFORK_DONE' => 5, 'EVENT_EXIT'       => 6,
+		'EVENT_SECCOMP'    => 7,
 	}
 	WAIT_EXTENDEDRESULT.update WAIT_EXTENDEDRESULT.invert
 
@@ -172,8 +267,8 @@ class PTrace
 		'EBX' => 0, 'ECX' => 1, 'EDX' => 2, 'ESI' => 3,
 		'EDI' => 4, 'EBP' => 5, 'EAX' => 6, 'DS'  => 7,
 		'ES'  => 8, 'FS'  => 9, 'GS'  => 10, 'ORIG_EAX' => 11,
-		'EIP' => 12, 'CS'  => 13, 'EFL' => 14, 'UESP'=> 15,
-		'EFLAGS' => 14, 'ESP' => 15,
+		'EIP' => 12, 'CS'  => 13,  'EFL' => 14, 'UESP'=> 15,
+					'EFLAGS' => 14, 'ESP' => 15,
 		'SS'  => 16,
 		# from ptrace.c in kernel source & asm-i386/user.h
 		'DR0' => 63, 'DR1' => 64, 'DR2' => 65, 'DR3' => 66,
@@ -188,21 +283,23 @@ class PTrace
 		'RIP' => 16, 'CS' => 17, 'RFLAGS' => 18, 'RSP' => 19,
 		'SS' => 20, 'FS_BASE' => 21, 'GS_BASE' => 22, 'DS' => 23,
 		'ES' => 24, 'FS' => 25, 'GS' => 26,
-		# fpval pad i387=29...73 tsz dsz ssz code stack sig res pad1 ar0 fps mag comm*4
-		'DR0' => 88, 'DR1' => 89, 'DR2' => 90, 'DR3' => 91,
-		'DR4' => 92, 'DR5' => 93, 'DR6' => 94, 'DR7' => 95,
-		'ERROR_CODE' => 96, 'FAULT_ADDR' => 97
+		#'FP_VALID' => 27,
+		#'387_XWD' => 28, '387_RIP' => 29, '387_RDP' => 30, '387_MXCSR' => 31,
+		#'FP0' => 32, 'FP1' => 34, 'FP2' => 36, 'FP3' => 38,
+		#'FP4' => 40, 'FP5' => 42, 'FP6' => 44, 'FP7' => 46,
+		#'XMM0' => 48, 'XMM1' => 52, 'XMM2' => 56, 'XMM3' => 60,
+		#'XMM4' => 64, 'XMM5' => 68, 'XMM6' => 72, 'XMM7' => 76,
+		#'FPAD0' => 80, 'FPAD11' => 91,
+		#'TSZ' => 92, 'DSZ' => 93, 'SSZ' => 94, 'CODE' => 95,
+		#'STK' => 96, 'SIG' => 97, 'PAD' => 98, 'U_AR0' => 99,
+		#'FPPTR' => 100, 'MAGIC' => 101, 'COMM0' => 102, 'COMM1' => 103,
+		#'COMM2' => 104, 'COMM3' => 105,
+		'DR0' => 106, 'DR1' => 107, 'DR2' => 108, 'DR3' => 109,
+		'DR4' => 110, 'DR5' => 111, 'DR6' => 112, 'DR7' => 113,
+		#'ERROR_CODE' => 114, 'FAULT_ADDR' => 115
 	}
 
-#  this struct defines the way the registers are stored on the stack during a system call.
-# struct pt_regs {
-#        long ebx; long ecx; long edx; long esi;
-#        long edi; long ebp; long eax; int  xds;
-#        int  xes; long orig_eax; long eip; int  xcs;
-#        long eflags; long esp; int  xss;
-# };
-
-	SYSCALLNR = %w[restart_syscall exit fork read write  open close waitpid  creat link unlink execve chdir time
+	SYSCALLNR_I386 = %w[restart_syscall exit fork read write open close waitpid creat link unlink execve chdir time
 		mknod chmod lchown break oldstat lseek getpid mount umount setuid getuid stime ptrace alarm oldfstat
 		pause utime stty gtty access nice ftime sync kill  rename mkdir rmdir dup pipe times prof brk setgid
 		getgid signal  geteuid getegid acct  umount2 lock ioctl fcntl  mpx setpgid ulimit  oldolduname umask
@@ -234,11 +331,11 @@ class PTrace
 		mknodat  fchownat  futimesat  fstatat64  unlinkat  renameat  linkat  symlinkat  readlinkat  fchmodat
 		faccessat pselect6 ppoll unshare set_robust_list get_robust_list splice sync_file_range tee vmsplice
 		move_pages   getcpu  epoll_pwait  utimensat   signalfd  timerfd  eventfd  fallocate  timerfd_settime
-	       	timerfd_gettime  signalfd4   eventfd2  epoll_create1   dup3   pipe2  inotify_init1   preadv  pwritev
+		timerfd_gettime  signalfd4   eventfd2  epoll_create1   dup3   pipe2  inotify_init1   preadv  pwritev
 		rt_tg_sigqueueinfo perf_counter_open].inject({}) { |h, sc| h.update sc => h.length }
-	SYSCALLNR.update SYSCALLNR.invert
-	
-	SYSCALLNR_64 = %w[read write open  close stat fstat lstat poll  lseek mmap mprotect munmap  brk rt_sigaction
+	SYSCALLNR_I386.update SYSCALLNR_I386.invert
+
+	SYSCALLNR_X86_64 = %w[read write open close stat fstat lstat poll lseek mmap mprotect munmap brk rt_sigaction
 		rt_sigprocmask  rt_sigreturn ioctl  pread64 pwrite64  readv  writev access  pipe select  sched_yield
 		mremap  msync  mincore  madvise  shmget  shmat  shmctl dup  dup2  pause  nanosleep  getitimer  alarm
 		setitimer  getpid  sendfile   socket  connect  accept  sendto  recvfrom   sendmsg  recvmsg  shutdown
@@ -269,10 +366,11 @@ class PTrace
 		vmsplice move_pages utimensat epoll_pwait  signalfd timerfd_create eventfd fallocate timerfd_settime
 		timerfd_gettime accept4  signalfd4 eventfd2  epoll_create1 dup3  pipe2 inotify_init1  preadv pwritev
 		rt_tgsigqueueinfo perf_counter_open].inject({}) { |h, sc| h.update sc => h.length }
-	SYSCALLNR_64.update SYSCALLNR_64.invert
+	SYSCALLNR_X86_64.update SYSCALLNR_X86_64.invert
 
-	SIGNAL = Signal.list
-	SIGNAL['TRAP'] ||= 5	# windows
+	SIGNAL = Signal.list.dup
+	SIGNAL.delete SIGNAL.index(0)
+	SIGNAL['TRAP'] ||= 5	# windows+gdbremote
 	SIGNAL.update SIGNAL.invert
 
 	# include/asm-generic/errno-base.h
@@ -281,76 +379,230 @@ class PTrace
 		ESPIPE EROFS EMLINK EPIPE EDOM ERANGE].inject({}) { |h, e| h.update e => h.length }
 	ERRNO.update ERRNO.invert
 
+	SIGINFO = {
+		# user-generated signal
+		'DETHREAD' => -7,	# execve killing threads
+		'TKILL' => -6, 'SIGIO' => -5, 'ASYNCIO' => -4, 'MESGQ' => -3,
+		'TIMER' => -2, 'QUEUE' => -1, 'USER' => 0, 'KERNEL' => 0x80,
+		# ILL
+		'ILLOPC' => 1, 'ILLOPN' => 2, 'ILLADR' => 3, 'ILLTRP' => 4,
+		'PRVOPC' => 5, 'PRVREG' => 6, 'COPROC' => 7, 'BADSTK' => 8,
+		# FPE
+		'INTDIV' => 1, 'INTOVF' => 2, 'FLTDIV' => 3, 'FLTOVF' => 4,
+		'FLTUND' => 5, 'FLTRES' => 6, 'FLTINV' => 7, 'FLTSUB' => 8,
+		# SEGV
+		'MAPERR' => 1, 'ACCERR' => 2,
+		# BUS
+		'ADRALN' => 1, 'ADRERR' => 2, 'OBJERR' => 3, 'MCEERR_AR' => 4,
+		'MCEERR_AO' => 5,
+		# TRAP
+		'BRKPT' => 1, 'TRACE' => 2, 'BRANCH' => 3, 'HWBKPT' => 4,
+		# CHLD
+		'EXITED' => 1, 'KILLED' => 2, 'DUMPED' => 3, 'TRAPPED' => 4,
+		'STOPPED' => 5, 'CONTINUED' => 6,
+		# POLL
+		'POLL_IN' => 1, 'POLL_OUT' => 2, 'POLL_MSG' => 3, 'POLL_ERR' => 4,
+		'POLL_PRI' => 5, 'POLL_HUP' => 6
+	}
+
+	SIGINFO_C = <<EOS
+typedef __int32 __pid_t;
+typedef unsigned __int32 __uid_t;
+typedef uintptr_t sigval_t;
+typedef long __clock_t;
+
+struct siginfo {
+    int si_signo;
+    int si_errno;
+    int si_code;
+    // int pad64;
+    union {
+        int _pad[128/4-3];	/* total >= 128b */
+
+        struct {		/* kill().  */
+            __pid_t si_pid;	/* Sending process ID.  */
+            __uid_t si_uid;	/* Real user ID of sending process.  */
+        } _kill;
+        struct {		/* POSIX.1b timers.  */
+            int si_tid;		/* Timer ID.  */
+            int si_overrun;	/* Overrun count.  */
+            sigval_t si_sigval;	/* Signal value.  */
+        } _timer;
+        struct {		/* POSIX.1b signals.  */
+            __pid_t si_pid;	/* Sending process ID.  */
+            __uid_t si_uid;	/* Real user ID of sending process.  */
+            sigval_t si_sigval;	/* Signal value.  */
+        } _rt;
+        struct {		/* SIGCHLD.  */
+            __pid_t si_pid;	/* Which child.  */
+            __uid_t si_uid;	/* Real user ID of sending process.  */
+            int si_status;	/* Exit value or signal.  */
+            __clock_t si_utime;
+            __clock_t si_stime;
+        } _sigchld;
+        struct {		/* SIGILL, SIGFPE, SIGSEGV, SIGBUS.  */
+            uintptr_t si_addr;	/* Faulting insn/memory ref.  */
+        } _sigfault;
+        struct {		/* SIGPOLL.  */
+            long int si_band;	/* Band event for SIGPOLL.  */
+            int si_fd;
+        } _sigpoll;
+        struct {                /* SIGSYS under SECCOMP */
+            uintptr_t si_calladdr; /* calling insn address */
+            int si_syscall;     /* triggering syscall nr */
+            int si_arch;        /* AUDIT_ARCH_* for syscall */
+        } _sigsys;
+    };
+};
+EOS
+
 	def sys_ptrace(req, pid, addr, data)
-		addr = [addr].pack(@packint).unpack(@packint).first
-		data = [data].pack(@packint).unpack(@packint).first
-		Kernel.syscall(@host_syscallnr['ptrace'], req, pid, addr, data)
+		ret = @sys_ptrace.ptrace(req, pid, addr, data)
+		if ret < 0 and ret > -256
+			raise SystemCallError.new("ptrace #{COMMAND.index(req) || req}", -ret)
+		end
+		ret
 	end
 
 	def traceme
-		sys_ptrace(COMMAND['TRACEME'],  0, 0, 0)
+		sys_ptrace(COMMAND[:TRACEME], 0, 0, 0)
 	end
 
 	def peektext(addr)
-		sys_ptrace(COMMAND['PEEKTEXT'], @pid, addr, @bufptr)
+		sys_ptrace(COMMAND[:PEEKTEXT], @pid, addr, @buf)
 		@buf
 	end
 
 	def peekdata(addr)
-		sys_ptrace(COMMAND['PEEKDATA'], @pid, addr, @bufptr)
+		sys_ptrace(COMMAND[:PEEKDATA], @pid, addr, @buf)
 		@buf
 	end
 
 	def peekusr(addr)
-		sys_ptrace(COMMAND['PEEKUSR'],  @pid, @host_intsize*addr, @bufptr)
-		bufval & ((1 << ([@host_intsize, @intsize].min*8)) - 1)
+		sys_ptrace(COMMAND[:PEEKUSR],  @pid, @host_intsize*addr, @buf)
+		@peekmask ||= (1 << ([@host_intsize, @intsize].min*8)) - 1
+		bufval & @peekmask
 	end
 
 	def poketext(addr, data)
-		sys_ptrace(COMMAND['POKETEXT'], @pid, addr, data.unpack(@packint).first)
+		sys_ptrace(COMMAND[:POKETEXT], @pid, addr, data.unpack(@packint).first)
 	end
 
 	def pokedata(addr, data)
-		sys_ptrace(COMMAND['POKEDATA'], @pid, addr, data.unpack(@packint).first)
+		sys_ptrace(COMMAND[:POKEDATA], @pid, addr, data.unpack(@packint).first)
 	end
 
 	def pokeusr(addr, data)
-		sys_ptrace(COMMAND['POKEUSR'],  @pid, @host_intsize*addr, data)
+		sys_ptrace(COMMAND[:POKEUSR],  @pid, @host_intsize*addr, data)
 	end
 
-	def cont(sig = 0)
-		sys_ptrace(COMMAND['CONT'], @pid, 0, sig)
+	def getregs(buf=nil)
+		buf = buf.str if buf.respond_to?(:str)	# AllocCStruct
+		buf ||= [0].pack('C')*512
+		sys_ptrace(COMMAND[:GETREGS], @pid, 0, buf)
+		buf
+	end
+	def setregs(buf)
+		buf = buf.str if buf.respond_to?(:str)
+		sys_ptrace(COMMAND[:SETREGS], @pid, 0, buf)
+	end
+
+	def getfpregs(buf=nil)
+		buf = buf.str if buf.respond_to?(:str)
+		buf ||= [0].pack('C')*1024
+		sys_ptrace(COMMAND[:GETFPREGS], @pid, 0, buf)
+		buf
+	end
+	def setfpregs(buf)
+		buf = buf.str if buf.respond_to?(:str)
+		sys_ptrace(COMMAND[:SETFPREGS], @pid, 0, buf)
+	end
+
+	def getfpxregs(buf=nil)
+		buf = buf.str if buf.respond_to?(:str)
+		buf ||= [0].pack('C')*512
+		sys_ptrace(COMMAND[:GETFPXREGS], @pid, 0, buf)
+		buf
+	end
+	def setfpxregs(buf)
+		buf = buf.str if buf.respond_to?(:str)
+		sys_ptrace(COMMAND[:SETFPXREGS], @pid, 0, buf)
+	end
+
+	def get_thread_area(addr)
+		sys_ptrace(COMMAND[:GET_THREAD_AREA],  @pid, addr, @buf)
+		bufval
+	end
+	def set_thread_area(addr, data)
+		sys_ptrace(COMMAND[:SET_THREAD_AREA],  @pid, addr, data)
+	end
+
+	def prctl(addr, data)
+		sys_ptrace(COMMAND[:ARCH_PRCTL], @pid, addr, data)
+	end
+
+	def cont(sig = nil)
+		sig ||= 0
+		sys_ptrace(COMMAND[:CONT], @pid, 0, sig)
 	end
 
 	def kill
-		sys_ptrace(COMMAND['KILL'], @pid, 0, 0)
+		sys_ptrace(COMMAND[:KILL], @pid, 0, 0)
 	end
 
-	def singlestep(sig = 0)
-		sys_ptrace(COMMAND['SINGLESTEP'], @pid, 0, sig)
+	def singlestep(sig = nil)
+		sig ||= 0
+		sys_ptrace(COMMAND[:SINGLESTEP], @pid, 0, sig)
 	end
 
-	def syscall(sig = 0)
-		sys_ptrace(COMMAND['SYSCALL'], @pid, 0, sig)
+	def singleblock(sig = nil)
+		sig ||= 0
+		sys_ptrace(COMMAND[:SINGLEBLOCK], @pid, 0, sig)
+	end
+
+	def syscall(sig = nil)
+		sig ||= 0
+		sys_ptrace(COMMAND[:SYSCALL], @pid, 0, sig)
 	end
 
 	def attach
-		sys_ptrace(COMMAND['ATTACH'], @pid, 0, 0)
+		sys_ptrace(COMMAND[:ATTACH], @pid, 0, 0)
 	end
 
 	def detach
-		sys_ptrace(COMMAND['DETACH'], @pid, 0, 0)
+		sys_ptrace(COMMAND[:DETACH], @pid, 0, 0)
 	end
 
 	def setoptions(*opt)
 		opt = opt.inject(0) { |b, o| b |= o.kind_of?(Integer) ? o : OPTIONS[o] }
-		sys_ptrace(COMMAND['SETOPTIONS'], @pid, 0, opt)
+		sys_ptrace(COMMAND[:SETOPTIONS], @pid, 0, opt)
 	end
 
 	# retrieve pid of cld for EVENT_CLONE/FORK, exitcode for EVENT_EXIT
 	def geteventmsg
-		sys_ptrace(COMMAND['GETEVENTMSG'], @pid, 0, @bufptr)
+		sys_ptrace(COMMAND[:GETEVENTMSG], @pid, 0, @buf)
 		bufval
+	end
+
+	def cp
+		@cp ||= @tgcpu.new_cparser
+	end
+
+	def siginfo
+		@siginfo ||= (
+			cp.parse SIGINFO_C if not cp.toplevel.struct['siginfo']
+			cp.alloc_c_struct('siginfo')
+		)
+	end
+
+	def getsiginfo
+		sys_ptrace(COMMAND[:GETSIGINFO], @pid, 0, siginfo.str)
+		siginfo
+	end
+
+	def setsiginfo(si=siginfo)
+		si = si.str if si.respond_to?(:str)
+		sys_ptrace(COMMAND[:SETSIGINFO], @pid, 0, si)
 	end
 end
 
@@ -360,12 +612,12 @@ class LinOS < OS
 		def memory
 			@memory ||= LinuxRemoteString.new(pid)
 		end
-		def memory=(m) @memory = m end
+		attr_writer :memory
 
 		def debugger
 			@debugger ||= LinDebugger.new(@pid)
 		end
-		def debugger=(d) @debugger = d end
+		attr_writer :debugger
 
 		# returns the list of loaded Modules, incl start address & path
 		# read from /proc/pid/maps
@@ -384,6 +636,7 @@ class LinOS < OS
 			}
 			list
 		rescue
+			[]
 		end
 
 		# return a list of [addr_start, length, perms, file]
@@ -396,13 +649,14 @@ class LinOS < OS
 			}
 			list
 		rescue
+			[]
 		end
 
 		# returns a list of threads sharing this process address space
 		# read from /proc/pid/task/
 		def threads
-			Dir.entries("/proc/#{pid}/task/").grep(/\d+/).map { |tid| tid.to_i }
-	       	rescue
+			Dir.entries("/proc/#{pid}/task/").grep(/^\d+$/).map { |tid| tid.to_i }
+		rescue
 			# TODO handle pthread stuff (eg 2.4 kernels)
 			[pid]
 		end
@@ -410,8 +664,12 @@ class LinOS < OS
 		# return the invocation commandline, from /proc/pid/cmdline
 		# this is manipulable by the target itself
 		def cmdline
-			File.read("/proc/#{pid}/cmdline")
-		rescue
+			@cmdline ||= File.read("/proc/#{pid}/cmdline") rescue ''
+		end
+		attr_writer :cmdline
+
+		def path
+			cmdline.split(0.chr)[0]
 		end
 
 		# returns the address size of the process, based on its #cpu
@@ -426,31 +684,406 @@ class LinOS < OS
 			e.decode_header(0, false, false)
 			e.cpu
 		end
-	end
 
-	# returns an array of Processes, with pid/module listing
-	def self.list_processes
-		Dir.entries('/proc').grep(/^\d+$/).map { |pid|
-			open_process(pid.to_i)
-		}
-	end
-
-	# search a Process whose pid/cmdline matches the argument
-	def self.find_process(tg)
-		if tg.kind_of? String and t = list_processes.find { |pr| pr.pid != ::Process.pid and pr.cmdline =~ /#{tg}/ }
-			return t
+		def terminate
+			kill
 		end
-		super(tg)
+
+		def kill(signr=9)
+			::Process.kill(signr, @pid)
+		end
+	end
+
+class << self
+	# returns an array of Processes, with pid/module listing
+	def list_processes
+		Dir.entries('/proc').grep(/^\d+$/).map { |pid| Process.new(pid.to_i) }
 	end
 
 	# return a Process for the specified pid if it exists in /proc
-	def self.open_process(pid)
-		Process.new(pid) if File.directory?("/proc/#{pid}")
+	def open_process(pid)
+		Process.new(pid) if check_process(pid)
+	end
+
+	def check_process(pid)
+		File.directory?("/proc/#{pid}")
 	end
 
 	# create a LinDebugger on the target pid/binary
-	def self.create_debugger(path)
+	def create_debugger(path)
 		LinDebugger.new(path)
+	end
+end	# class << self
+end
+
+class LinuxRemoteString < VirtualString
+	attr_accessor :pid, :readfd
+	attr_accessor :dbg
+
+	# returns a virtual string proxying the specified process memory range
+	# reads are cached (4096 aligned bytes read at once), from /proc/pid/mem
+	# writes are done directly by ptrace
+	def initialize(pid, addr_start=0, length=nil, dbg=nil)
+		@pid = pid
+		length ||= 1 << (dbg ? dbg.cpu.size : (LinOS.open_process(@pid).addrsz rescue 32))
+		@readfd = File.open("/proc/#@pid/mem", 'rb') rescue nil
+		@dbg = dbg if dbg
+		super(addr_start, length)
+	end
+
+	def dup(addr = @addr_start, len = @length)
+		self.class.new(@pid, addr, len, dbg)
+	end
+
+	def do_ptrace(needproc)
+		if dbg
+			dbg.switch_context(@pid) {
+				st = dbg.state
+				next if st != :stopped
+				if needproc
+					# we will try to access /proc/pid/mem
+					# if the main thread is still running, fallback to ptrace.readmem instead
+					pst = (dbg.tid == @pid ? st : dbg.tid_stuff[@pid][:state])
+					if pst != :stopped
+						savedreadfd = @readfd
+						@readfd = nil
+						begin
+							yield dbg.ptrace
+						ensure
+							@readfd = savedreadfd
+						end
+					else
+						yield dbg.ptrace
+					end
+				else
+					yield dbg.ptrace
+				end
+			}
+		else
+			PTrace.open(@pid) { |ptrace| yield ptrace }
+		end
+	end
+
+	def rewrite_at(addr, data)
+		# target must be stopped
+		wr = do_ptrace(false) { |ptrace| ptrace.writemem(addr, data) }
+		raise "couldn't ptrace_write at #{'%x' % addr}" if not wr
+	end
+
+	def get_page(addr, len=@pagelength)
+		do_ptrace(true) { |ptrace|
+			begin
+				if readfd and addr < (1<<63)
+					# 1<<63: ruby seek = 'too big to fit longlong', linux read = EINVAL
+					@readfd.pos = addr
+					@readfd.read len
+				elsif addr < (1<<(ptrace.host_intsize*8))
+					# can reach 1<<64 with peek_data only if ptrace accepts 64bit args
+					ptrace.readmem(addr, len)
+				end
+			rescue Errno::EIO, Errno::ESRCH
+				nil
+			end
+		}
+	end
+end
+
+class PTraceContext_Ia32 < PTrace
+	C_STRUCT = <<EOS
+struct user_regs_struct_ia32 {
+	unsigned __int32 ebx;
+	unsigned __int32 ecx;
+	unsigned __int32 edx;
+	unsigned __int32 esi;
+	unsigned __int32 edi;
+	unsigned __int32 ebp;
+	unsigned __int32 eax;
+	unsigned __int32 ds;
+	unsigned __int32 es;
+	unsigned __int32 fs;
+	unsigned __int32 gs;
+	unsigned __int32 orig_eax;
+	unsigned __int32 eip;
+	unsigned __int32 cs;
+	unsigned __int32 eflags;
+	unsigned __int32 esp;
+	unsigned __int32 ss;
+};
+
+struct user_fxsr_struct_ia32 {
+	unsigned __int16 cwd;
+	unsigned __int16 swd;
+	unsigned __int16 twd;
+	unsigned __int16 fop;
+	unsigned __int32 fip;
+	unsigned __int32 fcs;
+	unsigned __int32 foo;
+	unsigned __int32 fos;
+	unsigned __int32 mxcsr;
+	unsigned __int32 reserved;
+	unsigned __int32 st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
+	unsigned __int32 xmm_space[32];  /* 8*16 bytes for each XMM-reg = 128 bytes */
+	unsigned __int32 padding[56];
+};
+EOS
+
+	def initialize(ptrace, pid=ptrace.pid)
+		super(ptrace, :dup)
+		@pid = pid
+		@cp = ptrace.cp
+		init
+	end
+
+	def init
+		@gpr = @@gpr_ia32 ||= [:ebx, :ecx, :edx, :esi, :edi, :ebp, :eax,
+			:ds, :es, :fs, :gs, :orig_eax, :eip, :cs, :eflags,
+			:esp, :ss].inject({}) { |h, r| h.update r => true }
+		@gpr_peek = @@gpr_peek_ia32 ||= (0..7).inject({}) { |h, i|
+			h.update "dr#{i}".to_sym => REGS_I386["DR#{i}"] }
+		@gpr_sub = @@gpr_sub_ia32 ||= gpr_sub_init
+		@xmm = @@xmm_ia32 ||= [:cwd, :swd, :twd, :fop, :fip, :fcs, :foo,
+			:fos, :mxcsr].inject({}) { |h, r| h.update r => true }
+		@cp.parse C_STRUCT if not @cp.toplevel.struct['user_regs_struct_ia32']
+		@gpr_st = @xmm_st = nil
+	end
+
+	# :bh => [:ebx, 0xff, 8]
+	# XXX similar to Reg.symbolic... DRY
+	def gpr_sub_init
+		ret = {}
+		%w[a b c d].each { |r|
+			b = "e#{r}x".to_sym
+			ret["#{r}x".to_sym] = [b, 0xffff]
+			ret["#{r}l".to_sym] = [b, 0xff]
+			ret["#{r}h".to_sym] = [b, 0xff, 8]
+		}
+		%w[sp bp si di].each { |r|
+			b = "e#{r}".to_sym
+			ret[r.to_sym] = [b, 0xffff]
+		}
+		ret[:orig_rax] = [:orig_eax, 0xffff_ffff]
+		ret
+	end
+
+	def do_getregs
+		st = cp.alloc_c_struct('user_regs_struct_ia32')
+		getregs(st)
+		st
+	end
+
+	def do_setregs(st=@gpr_st)
+		setregs(st)
+	end
+
+	def do_getxmm
+		st = cp.alloc_c_struct('user_fxsr_struct_ia32')
+		getfpxregs(st)
+		st
+	end
+
+	def do_setxmm(st=@xmm_st)
+		setfpxregs(st)
+	end
+
+	def get_reg(r)
+		r = r.downcase if r == 'ORIG_EAX' or r == 'ORIG_RAX'
+		rs = r.to_sym
+		if @gpr[rs]
+			@gpr_st ||= do_getregs
+			@gpr_st[rs]
+		elsif o = @gpr_peek[rs]
+			peekusr(o)
+		elsif o = @gpr_sub[rs]
+			v = get_reg(o[0])
+			v >>= o[2] if o[2]
+			v &= o[1]
+		elsif @xmm[rs]
+			@xmm_st ||= do_getxmm
+			@xmm_st[rs]
+		else
+			case r.to_s
+			when /^st(\d?)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.st_space
+				[fu[4*i], fu[4*i+1], fu[4*i+2]].pack('L*').unpack('D').first	# XXX
+			when /^mmx?(\d)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.st_space
+				fu[4*i] | (fu[4*i + 1] << 32)
+			when /^xmm(\d+)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.xmm_space
+				fu[4*i] | (fu[4*i + 1] << 32) | (fu[4*i + 2] << 64) | (fu[4*i + 3] << 96)
+			# TODO when /^ymm(\d+)$/i
+			else raise "unknown register name #{r}"
+			end
+		end
+	end
+
+	def set_reg(r, v)
+		r = r.downcase if r == 'ORIG_EAX' or r == 'ORIG_RAX'
+		rs = r.to_sym
+		if @gpr[rs]
+			@gpr_st ||= do_getregs
+			@gpr_st[rs] = v
+			do_setregs
+		elsif o = @gpr_peek[rs]
+			pokeusr(o, v)
+		elsif o = @gpr_sub[rs]
+			vo = get_reg(o[0])
+			msk = o[1]
+			v &= o[1]
+			if o[2]
+				msk <<= o[2]
+				v <<= o[2]
+			end
+			v |= vo & ~msk
+			set_reg(o[0], v)
+		elsif @xmm[rs]
+			@xmm_st ||= do_getxmm
+			@xmm_st[rs] = v
+			do_setxmm
+		else
+			case r.to_s
+			when /^st(\d?)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.st_space
+				fu[4*i], fu[4*i+1], fu[4*i+2] = [v, -1].pack('DL').unpack('L*')	# XXX
+				do_setxmm
+			when /^mmx?(\d)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.st_space
+				fu[4*i] = v & 0xffff_ffff
+				fu[4*i + 1] = (v >> 32) & 0xffff_ffff
+				do_setxmm
+			when /^xmm(\d+)$/i
+				i = $1.to_i
+				@xmm_st ||= do_getxmm
+				fu = @xmm_st.xmm_space
+				fu[4*i] = v & 0xffff_ffff
+				fu[4*i + 1] = (v >> 32) & 0xffff_ffff
+				fu[4*i + 2] = (v >> 64) & 0xffff_ffff
+				fu[4*i + 3] = (v >> 96) & 0xffff_ffff
+				do_setxmm
+			# TODO when /^ymm(\d+)$/i
+			else raise "unknown register name #{r}"
+			end
+		end
+	end
+end
+
+class PTraceContext_X64 < PTraceContext_Ia32
+	C_STRUCT = <<EOS
+struct user_regs_struct_x64 {
+	unsigned __int64 r15;
+	unsigned __int64 r14;
+	unsigned __int64 r13;
+	unsigned __int64 r12;
+	unsigned __int64 rbp;
+	unsigned __int64 rbx;
+	unsigned __int64 r11;
+	unsigned __int64 r10;
+	unsigned __int64 r9;
+	unsigned __int64 r8;
+	unsigned __int64 rax;
+	unsigned __int64 rcx;
+	unsigned __int64 rdx;
+	unsigned __int64 rsi;
+	unsigned __int64 rdi;
+	unsigned __int64 orig_rax;
+	unsigned __int64 rip;
+	unsigned __int64 cs;
+	unsigned __int64 rflags;
+	unsigned __int64 rsp;
+	unsigned __int64 ss;
+	unsigned __int64 fs_base;
+	unsigned __int64 gs_base;
+	unsigned __int64 ds;
+	unsigned __int64 es;
+	unsigned __int64 fs;
+	unsigned __int64 gs;
+};
+
+struct user_i387_struct_x64 {
+	unsigned __int16 cwd;
+	unsigned __int16 swd;
+	unsigned __int16 twd;    /* Note this is not the same as the 32bit/x87/FSAVE twd */
+	unsigned __int16 fop;
+	unsigned __int64 rip;
+	unsigned __int64 rdp;
+	unsigned __int32 mxcsr;
+	unsigned __int32 mxcsr_mask;
+	unsigned __int32 st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
+	unsigned __int32 xmm_space[64];  /* 16*16 bytes for each XMM-reg = 256 bytes */
+	unsigned __int32 padding[24];
+	// YMM ?
+};
+EOS
+
+	def init
+		@gpr = @@gpr_x64 ||= [:r15, :r14, :r13, :r12, :rbp, :rbx, :r11,
+			:r10, :r9, :r8, :rax, :rcx, :rdx, :rsi, :rdi, :orig_rax,
+			:rip, :cs, :rflags, :rsp, :ss, :fs_base, :gs_base, :ds,
+			:es, :fs, :gs].inject({}) { |h, r| h.update r => true }
+		@gpr_peek = @@gpr_peek_x64 ||= (0..7).inject({}) { |h, i|
+			h.update "dr#{i}".to_sym => REGS_X86_64["DR#{i}"] }
+		@gpr_sub = @@gpr_sub_x64 ||= gpr_sub_init
+		@xmm = @@xmm_x64 ||= [:cwd, :swd, :twd, :fop, :rip, :rdp, :mxcsr,
+			:mxcsr_mask].inject({}) { |h, r| h.update r => true }
+		@cp.parse C_STRUCT if not @cp.toplevel.struct['user_regs_struct_x64']
+		@gpr_st = @xmm_st = nil
+	end
+
+	def gpr_sub_init
+		ret = {}
+		%w[a b c d].each { |r|
+			b = "r#{r}x".to_sym
+			ret["e#{r}x".to_sym] = [b, 0xffff_ffff]
+			ret[ "#{r}x".to_sym] = [b, 0xffff]
+			ret[ "#{r}l".to_sym] = [b, 0xff]
+			ret[ "#{r}h".to_sym] = [b, 0xff, 8]
+		}
+		%w[sp bp si di].each { |r|
+			b = "r#{r}".to_sym
+			ret["e#{r}".to_sym] = [b, 0xffff_ffff]
+			ret[ "#{r}".to_sym] = [b, 0xffff]
+			ret["#{r}l".to_sym] = [b, 0xff]
+		}
+		(8..15).each { |i|
+			b = "r#{i}".to_sym
+			ret["r#{i}d"] = [b, 0xffff_ffff]
+			ret["r#{i}w"] = [b, 0xffff]
+			ret["r#{i}b"] = [b, 0xff]
+		}
+		ret[:eip] = [:rip, 0xffff_ffff]
+		ret[:eflags] = [:rflags, 0xffff_ffff]
+		ret[:orig_eax] = [:orig_rax, 0xffff_ffff]
+		ret
+	end
+
+	def do_getregs
+		st = cp.alloc_c_struct('user_regs_struct_x64')
+		getregs(st)
+		st
+	end
+
+	def do_setregs(st=@gpr_st)
+		setregs(st)
+	end
+
+	def do_getxmm
+		st = cp.alloc_c_struct('user_i387_struct_x64')
+		getfpregs(st)
+		st
+	end
+
+	def do_setxmm(st=@xmm_st)
+		setfpregs(st)
 	end
 end
 
@@ -461,433 +1094,494 @@ end
 
 # this class implements a high-level API over the ptrace debugging primitives
 class LinDebugger < Debugger
-	attr_accessor :ptrace, :pass_exceptions, :continuesignal
+	# ptrace is per-process or per-thread ?
+	attr_accessor :ptrace, :continuesignal, :has_pax_mprotect, :target_syscall, :cached_waitpid
+	attr_accessor :callback_syscall, :callback_branch, :callback_exec
 
-	attr_accessor :stop_on_threadcreate, :stop_on_threadexit
-	attr_accessor :callback_threadcreate, :callback_threadexit, :callback_ignoresig
-
-	def initialize(pid, mem=nil)
-		@ptrace = PTrace.new(pid)
-		reinit(mem)
-		@pass_exceptions = true
-		@trace_children = true
+	def initialize(pidpath=nil, &b)
 		super()
-		get_thread_list(@pid).each { |tid| attach_thread(tid) }
+		@pid_stuff_list << :has_pax_mprotect << :ptrace	<< :breaking << :os_process
+		@tid_stuff_list << :continuesignal << :saved_csig << :ctx << :target_syscall
+
+		# by default, break on all signals except SIGWINCH (terminal resize notification)
+		@pass_all_exceptions = lambda { |e| e[:signal] == 'WINCH' }
+
+		@callback_syscall = lambda { |i| log "syscall #{i[:syscall]}" }
+		@callback_exec = lambda { |i| log "execve #{os_process.path}" }
+		@cached_waitpid = []
+
+		return if not pidpath
+
+		t = begin; Integer(pidpath)
+		    rescue ArgumentError, TypeError
+		    end
+		t ? attach(t) : create_process(pidpath, &b)
+	end
+
+	def shortname; 'lindbg'; end
+
+	# attach to a running process and all its threads
+	def attach(pid, do_attach=:attach)
+		pt = PTrace.new(pid, do_attach)
+		set_context(pt.pid, pt.pid)	# swapout+init_newpid
+		log "attached #@pid"
+		list_threads.each { |tid| attach_thread(tid) if tid != @pid }
+		set_tid @pid
+	end
+
+	# create a process and debug it
+	# if given a block, the block is run in the context of the ruby subprocess
+	# after the fork() and before exec()ing the target binary
+	# you can use it to eg tweak file descriptors:
+	#  tg_stdin_r, tg_stdin_w = IO.pipe
+	#  create_process('/bin/cat') { tg_stdin_w.close ; $stdin.reopen(tg_stdin_r) }
+	#  tg_stdin_w.write 'lol'
+	def create_process(path, &b)
+		pt = PTrace.new(path, :create, &b)
+		# TODO save path, allow restart etc
+		set_context(pt.pid, pt.pid)	# swapout+init_newpid
+		log "attached #@pid"
+	end
+
+	def initialize_cpu
+		@cpu = os_process.cpu
+		# need to init @ptrace here, before init_dasm calls gui.swapin	XXX this stinks
+		@ptrace = PTrace.new(@pid, false)
+		if @cpu.size == 64 and @ptrace.reg_off['EAX']
+			hack_x64_32
+		end
+		set_tid @pid
+		set_thread_options
+	end
+
+	def initialize_memory
+		@memory = os_process.memory = LinuxRemoteString.new(@pid, 0, nil, self)
 	end
 
 	def os_process
-		LinOS.open_process(@pid)
+		@os_process ||= LinOS.open_process(@pid)
 	end
 
-	# recreate all internal state associated to pid
-	def reinit(mem=nil)
-		ptrace.tweak_for_pid
-		@tid = @pid = ptrace.pid
-		@threads = { @tid => { :state => :stopped } }	# TODO regs_cache, hwbp, singlestepcb, continuesig, breaking...
-		@cpu = LinOS.open_process(@pid).cpu
-		if @cpu.size == 64 and @ptrace.reg_off['EAX']
-			hack_64_32
-		end
-		@memory = mem || LinuxRemoteString.new(@pid)
-		@memory.dbg = self
-		@has_pax = false
-		@continuesignal = 0
-		@reg_val_cache = {}
-		@breaking = false
+	def list_threads
+		os_process.threads
 	end
 
-	# we're a 32bit process debugging a 64bit target
+	def list_processes
+		LinOS.list_processes
+	end
+
+	def check_pid(pid)
+		LinOS.check_process(pid)
+	end
+
+	def mappings
+		os_process.mappings
+	end
+
+	def modules
+		os_process.modules
+	end
+
+	# We're a 32bit process debugging a 64bit target
 	# the ptrace kernel interface we use only allow us a 32bit-like target access
-	# with this we advertize the cpu as having eax..edi registers (the only one we
+	# With this we advertize the cpu as having eax..edi registers (the only one we
 	# can access), while still decoding x64 instructions (whose addr < 4G)
-	def hack_64_32
-		puts "WARNING: debugging a 64bit process from a 32bit debugger is a very bad idea !"
-		@cpu.instance_eval {
-			ia32 = Ia32.new
-			@dbg_register_pc = ia32.dbg_register_pc
-			@dbg_register_flags = ia32.dbg_register_flags
-			@dbg_register_list = ia32.dbg_register_list
-			@dbg_register_size = ia32.dbg_register_size
-		}
+	def hack_x64_32
+		log "WARNING: debugging a 64bit process from a 32bit debugger is a very bad idea !"
+		ia32 = Ia32.new
+		@cpu.instance_variable_set('@dbg_register_pc', ia32.dbg_register_pc)
+		@cpu.instance_variable_set('@dbg_register_sp', ia32.dbg_register_sp)
+		@cpu.instance_variable_set('@dbg_register_flags', ia32.dbg_register_flags)
+		@cpu.instance_variable_set('@dbg_register_list', ia32.dbg_register_list)
+		@cpu.instance_variable_set('@dbg_register_size', ia32.dbg_register_size)
 	end
 
+	# attach a thread of the current process
 	def attach_thread(tid)
+		set_tid tid
 		@ptrace.pid = tid
-		if not @threads[tid] or @threads[tid][:state] == :new
-			@ptrace.attach
-			@threads[tid] ||= { :regs_cache => {} }
-			@threads[tid][:state] = :stopped
-			puts "attached thread #{tid}" if $VERBOSE
-		end
-		opts = ['TRACESYSGOOD', 'TRACECLONE', 'TRACEEXEC', 'TRACEEXIT']
-		opts += ['TRACEFORK', 'TRACEVFORK', 'TRACEVFORKDONE'] if @trace_children
+		@ptrace.attach
+		@state = :stopped
+		# store this waitpid so that we can return it in a future check_target
+		::Process.waitpid(tid, ::Process::WALL)
+		# XXX can $? be safely stored?
+		@cached_waitpid << [tid, $?.dup]
+		log "attached thread #{tid}"
+		set_thread_options
+	rescue Errno::ESRCH
+		# raced, thread quitted already
+		del_tid
+	end
+
+	# set the debugee ptrace options (notify clone/exec/exit, and fork/vfork depending on @trace_children)
+	def set_thread_options
+		opts  = %w[TRACESYSGOOD TRACECLONE TRACEEXEC TRACEEXIT]
+		opts += %w[TRACEFORK TRACEVFORK TRACEVFORKDONE] if trace_children
+		@ptrace.pid = @tid
 		@ptrace.setoptions(*opts)
 	end
 
-	def trace_children; @trace_children end
-	def trace_children=(t)
-		@trace_children=t
-		if @state == :running
-			self.break
-			do_wait_target
-		end
-		get_thread_list(@pid).each { |tid| attach_thread(tid) }
-	end
-
-	def tid=(t)
-		@tid_changed = (@tid != t)
-		if @tid_changed
-			@reg_val_cache.clear
-			@state = @threads[tid][:state] rescue @state
-		end
-		@tid = @ptrace.pid = t
-	end
-
-	def get_thread_list(pid=@pid)
-		LinOS.open_process(pid).threads
-	end
-
-	def get_process_list
-		[@pid]
+	# update the current pid relative to tracing children (@trace_children only effects newly traced pid/tid)
+	def do_trace_children
+		each_tid { set_thread_options }
 	end
 
 	def invalidate
-		@reg_val_cache.clear
+		@ctx = nil
 		super()
+	end
+
+	# current thread register values accessor
+	def ctx
+		@ctx ||= case @ptrace.host_csn
+			 when 'ia32'; PTraceContext_Ia32.new(@ptrace, @tid)
+			 when 'x64'; PTraceContext_X64.new(@ptrace, @tid)
+			 else raise '8==D'
+			 end
 	end
 
 	def get_reg_value(r)
-		raise "bad register #{r}" if not k = @ptrace.reg_off[r.to_s.upcase]
-		return @reg_val_cache[r] || 0 if @state != :stopped
-		@reg_val_cache[r] ||= @ptrace.peekusr(k)
+		return 0 if @state != :stopped
+		ctx.get_reg(r)
+	rescue Errno::ESRCH
+		0
 	end
 	def set_reg_value(r, v)
-		raise "bad register #{r}" if not k = @ptrace.reg_off[r.to_s.upcase]
-		@reg_val_cache[r] = v
-		return if @state != :stopped
-		@ptrace.pokeusr(k, v)
+		ctx.set_reg(r, v)
 	end
 
-	def update_waitpid
-		if $?.exited?
-			@info = "#@tid exitcode #{$?.exitstatus}"
-			puts @info if $VERBOSE
-			@threads.delete @tid
-			self.tid = @threads.keys.first || @tid
-			@state = @threads.empty? ? :dead : @threads[@tid][:state]
-		elsif $?.signaled?
-			@info = "#@tid signalx #{$?.termsig} #{PTrace::SIGNAL[$?.termsig]}"
-			puts @info if $VERBOSE
-			@threads.delete @tid
-			self.tid = @threads.keys.first || @tid
-			@state = @threads.empty? ? :dead : @threads[@tid][:state]
-		elsif $?.stopped?
-			sig = $?.stopsig & 0x7f
-			if sig == PTrace::SIGNAL['TRAP']	# possible ptrace event 
-				return if not @threads[@tid]
-				@state = @threads[@tid][:state] = :stopped
-				if $?.stopsig & 0x80 > 0
-					@info = "#@tid syscall #{@ptrace.syscallnr[get_reg_value(:orig_eax)]}"
-					puts @info if $VERBOSE
-					if @target_syscall and @info !~ /#@target_syscall/
-					       	syscall(@target_syscall)
-						return if @state == :running
-					end
-				elsif ($? >> 16) > 0
-					o = PTrace::WAIT_EXTENDEDRESULT[$? >> 16]
-					case o
-					when 'EVENT_FORK', 'EVENT_VFORK'
-						@memory.readfd = nil	# can't read from /proc/parentpid/mem anymore
-						cld = @ptrace.geteventmsg
-						@threads[cld] ||= {}
-						@threads[cld][:state] ||= :new	# may have already handled STOP
-					when 'EVENT_CLONE'
-						cld = @ptrace.geteventmsg
-						@threads[cld] ||= {}
-						@threads[cld][:state] ||= :new	# may have already handled STOP
-						return run_resume unless stop_on_threadcreate
-					when 'EVENT_EXIT'
-						@threads[@tid][:state] = :dead
-						@callback_threadexit[@tid] if callback_threadexit
-						return run_resume unless stop_on_threadexit
-					when 'EVENT_EXEC'
-						# XXX clear maps/syms/bpx..
-						# also check if it kills the other threads
-						reinit
-					when 'EVENT_VFORKDONE'
-					end
-					@info = "#@tid trace event #{o}"
-					puts @info if $VERBOSE
-				else
-					@info = nil	# standard breakpoint, no need for specific info
-							# TODO check target-initiated #i3 (antidebug etc)
-					puts "#@tid breakpoint break" if @tid_changed and $VERBOSE
-				end
-				@continuesignal = 0
-			elsif sig == PTrace::SIGNAL['STOP'] and ((@threads[@tid] ||= {})[:state] ||= :new) == :new
-				@memory.readfd = nil if not get_thread_list(@pid).include? @tid	# FORK, can't read from /proc/parentpid/mem anymore
-				@state = @threads[@tid][:state] = :stopped
-				@info = "#@tid new thread started"
-				puts @info if $VERBOSE
-				@callback_threadcreate[@tid] if callback_threadcreate
-				return do_continue unless stop_on_threadcreate
-				@continuesignal = 0
+	def update_waitpid(status)
+		invalidate
+		@continuesignal = 0
+		@state = :stopped	# allow get_reg (for eg pt_syscall)
+		info = { :status => status }
+		if status.exited?
+			info.update :exitcode => status.exitstatus
+			if @tid == @pid		# XXX
+				evt_endprocess info
 			else
-				return if not @threads[@tid]	# spurious sig ?
-				@state = @threads[@tid][:state] = :stopped
-				if @breaking and sig == PTrace::SIGNAL['STOP']
-					@info = nil
-					puts "#@tid break" if $VERBOSE
-					@continuesignal = 0
-					@breaking = nil
-				elsif want_ignore_signal($?.stopsig)
-					sig = @continuesignal = $?.stopsig
-					puts "#@tid ignored signal #{sig} #{PTrace::SIGNAL[sig]}" if $VERBOSE
-					return run_resume
+				evt_endthread info
+			end
+		elsif status.signaled?
+			info.update :signal => (PTrace::SIGNAL[status.termsig] || status.termsig)
+			if @tid == @pid
+				evt_endprocess info
+			else
+				evt_endthread info
+			end
+		elsif status.stopped?
+			sig = status.stopsig & 0x7f
+			signame = PTrace::SIGNAL[sig]
+			if signame == 'TRAP'
+				if status.stopsig & 0x80 > 0
+					# XXX int80 in x64 => syscallnr32 ?
+					evt_syscall info.update(:syscall => @ptrace.syscallnr[get_reg_value(@ptrace.syscallreg)])
+
+				elsif (status >> 16) > 0
+					case PTrace::WAIT_EXTENDEDRESULT[status >> 16]
+					when 'EVENT_FORK', 'EVENT_VFORK'
+						# parent notification of a fork
+						# child receives STOP (may have already happened)
+						#cld = @ptrace.geteventmsg
+						resume_badbreak
+
+					when 'EVENT_CLONE'
+						#cld = @ptrace.geteventmsg
+						resume_badbreak
+
+					when 'EVENT_EXIT'
+						@ptrace.pid = @tid
+						info.update :exitcode => @ptrace.geteventmsg
+						if @tid == @pid
+							evt_endprocess info
+						else
+							evt_endthread info
+						end
+
+					when 'EVENT_VFORKDONE'
+						resume_badbreak
+
+					when 'EVENT_EXEC'
+						evt_exec info
+					end
+
 				else
-					sig = @continuesignal = $?.stopsig
-					@info = "#@tid signal #{sig} #{PTrace::SIGNAL[sig]}"
+					@ptrace.pid = @tid
+					si = @ptrace.getsiginfo
+					case si.si_code
+					when PTrace::SIGINFO['BRKPT'],
+					     PTrace::SIGINFO['KERNEL']	# \xCC prefer KERNEL to BRKPT
+						evt_bpx
+					when PTrace::SIGINFO['TRACE']
+						evt_singlestep	# singlestep/singleblock
+					when PTrace::SIGINFO['BRANCH']
+						evt_branch	# XXX BTS?
+					when PTrace::SIGINFO['HWBKPT']
+						evt_hwbp
+					else
+						@saved_csig = @continuesignal = sig
+						info.update :signal => signame, :type => "SIG#{signame}"
+						evt_exception info
+					end
 				end
+
+			elsif signame == 'STOP' and @info == 'new'
+				# new thread break on creation (eg after fork + TRACEFORK)
+				if @pid == @tid
+					attach(@pid, false)
+					evt_newprocess info
+				else
+					evt_newthread info
+				end
+
+			elsif signame == 'STOP' and @breaking
+				@state = :stopped
+				@info = 'break'
+				@breaking.call if @breaking.kind_of? Proc
+				@breaking = nil
+
+			else
+				@saved_csig = @continuesignal = sig
+				info.update :signal => signame, :type => "SIG#{signame}"
+				if signame == 'SEGV'
+					# need more data on access violation (for bpm)
+					info.update :type => 'access violation'
+					@ptrace.pid = @tid
+					si = @ptrace.getsiginfo
+					access = case si.si_code
+						 when PTrace::SIGINFO['MAPERR']; :r	# XXX write access to unmapped => ?
+						 when PTrace::SIGINFO['ACCERR']; :w
+						 end
+					info.update :fault_addr => si.si_addr, :fault_access => access
+				end
+				evt_exception info
 			end
 		else
-			@state = :stopped
-			@info = "#@tid unknown wait #{$?.inspect} #{'%x' % ($? >> 16)}"
-			puts @info if $VERBOSE
+			log "unknown wait status #{status.inspect}"
+			evt_exception info.update(:type => "unknown wait #{status.inspect}")
 		end
-		@target_syscall = nil
 	end
-	
-	# check if we are supposed to ignore the signal sig
-	def want_ignore_signal(sig)
-		callback_ignoresig ? @callback_ignoresig[sig] : sig == PTrace::SIGNAL['WINCH']
+
+	def set_tid_findpid(tid)
+		return if tid == @tid
+		if tid != @pid and !@tid_stuff[tid]
+			if kv = @pid_stuff.find { |k, v| v[:tid_stuff] and v[:tid_stuff][tid] }
+				set_pid kv[0]
+			elsif pr = list_processes.find { |p| p.threads.include?(tid) }
+				set_pid pr.pid
+			end
+		end
+		set_tid tid
 	end
 
 	def do_check_target
-		return unless t = ::Process.waitpid(-1, ::Process::WNOHANG | ::Process::WALL)
-		loop do
-			self.tid = t
-			invalidate
-			update_waitpid
-			break if not t = ::Process.waitpid(-1, ::Process::WNOHANG | ::Process::WALL)
+		if @cached_waitpid.empty?
+			t = ::Process.waitpid(-1, ::Process::WNOHANG | ::Process::WALL)
+			st = $?
+		else
+			t, st = @cached_waitpid.shift
 		end
+		return if not t
+		set_tid_findpid t
+		update_waitpid st
+		true
 	rescue ::Errno::ECHILD
-		@state = :dead
 	end
 
 	def do_wait_target
-		t = ::Process.waitpid(-1, ::Process::WALL)
-		self.tid = t
-		invalidate
-		update_waitpid
-		do_check_target if @state != :dead
-	rescue ::Errno::ECHILD
-		@state = :dead
-	end
-
-	# resume execution of the target, ignoring the current stop cause
-	# must be called before updating @info
-	def run_resume
-		case @info
-		when 'singlestep'; do_singlestep
-		when 'syscall'; syscall
-		when 'continue'; do_continue
-		else do_singlestep	# ?
-		end
-		@state = :running
-	end
-
-	def parse_run_signal(sig)
-		case sig
-		when nil; (@pass_exceptions ? parse_run_signal(@continuesignal || 0) : 0)
-		when ::Integer; sig 
-		when ::String, ::Symbol
-			PTrace::SIGNAL[sig.to_s.upcase.sub(/SIG_?/, '')] || Integer(sig)
+		if @cached_waitpid.empty?
+			t = ::Process.waitpid(-1, ::Process::WALL)
+			st = $?
 		else
-			raise "invalid continue signal #{sig.inspect}"
+			t, st = @cached_waitpid.shift
 		end
-	rescue ::ArgumentError
-		raise "invalid continue signal #{sig.inspect}"
+		set_tid_findpid t
+		update_waitpid st
+	rescue ::Errno::ECHILD
 	end
 
-	def do_continue(*a)
-		return if @state != :stopped
-		@threads.each { |tid, tdata|
-			# TODO continue only a userconfigured subset of threads
-			next if tdata[:state] == :running
-			tdata[:state] = :running
-			sig = parse_run_signal(a.first)
-			@ptrace.pid = tid
-			@ptrace.cont(sig)
-		}
-		@ptrace.pid = @tid
+	def do_continue
 		@state = :running
-		@info = 'continue'
+		@ptrace.pid = tid
+		@ptrace.cont(@continuesignal)
 	end
 
 	def do_singlestep(*a)
-		return if @state != :stopped
-		@threads[tid][:state] = :running
 		@state = :running
-		@info = 'singlestep'
-		sig = parse_run_signal(a.first)
-		@ptrace.singlestep(sig)
+		@ptrace.pid = tid
+		@ptrace.singlestep(@continuesignal)
 	end
 
-	def need_stepover(di)
-		di and ((di.instruction.prefix and di.instruction.prefix[:rep]) or di.opcode.props[:saveip])
+	# use the PT_SYSCALL to break on next syscall
+	# regexp allowed to wait a specific syscall
+	def syscall(arg=nil)
+		arg = nil if arg and arg.strip == ''
+		if b = check_breakpoint_cause and b.hash_shared.find { |bb| bb.state == :active }
+			singlestep_bp(b) {
+				next if not check_pre_run(:syscall, arg)
+				@target_syscall = arg
+				@state = :running
+				@ptrace.pid = @tid
+				@ptrace.syscall(@continuesignal)
+			}
+		else
+			return if not check_pre_run(:syscall, arg)
+			@target_syscall = arg
+			@state = :running
+			@ptrace.pid = @tid
+			@ptrace.syscall(@continuesignal)
+		end
 	end
 
-	def break
-		@breaking = true
-		kill('STOP')
+	def syscall_wait(*a, &b)
+		syscall(*a, &b)
+		wait_target
+	end
+
+	# use the PT_SINGLEBLOCK to execute until the next branch
+	def singleblock
+		# record as singlestep to avoid evt_singlestep -> evt_exception
+		# step or block doesn't matter much here anyway
+		if b = check_breakpoint_cause and b.hash_shared.find { |bb| bb.state == :active }
+			singlestep_bp(b) {
+				next if not check_pre_run(:singlestep)
+				@state = :running
+				@ptrace.pid = @tid
+				@ptrace.singleblock(@continuesignal)
+			}
+		else
+			return if not check_pre_run(:singlestep)
+			@state = :running
+			@ptrace.pid = @tid
+			@ptrace.singleblock(@continuesignal)
+		end
+	end
+
+	def singleblock_wait(*a, &b)
+		singleblock(*a, &b)
+		wait_target
+	end
+
+	# woke up from a PT_SYSCALL
+	def evt_syscall(info={})
+		@state = :stopped
+		@info = "syscall #{info[:syscall]}"
+
+		callback_syscall[info] if callback_syscall
+
+		if @target_syscall and info[:syscall] !~ /^#@target_syscall$/i
+			resume_badbreak
+		else
+			@target_syscall = nil
+		end
+	end
+
+	# SIGTRAP + SIGINFO_TRAP_BRANCH = ?
+	def evt_branch(info={})
+		@state = :stopped
+		@info = "branch"
+
+		callback_branch[info] if callback_branch
+	end
+
+	# called during sys_execve in the new process
+	def evt_exec(info={})
+		@state = :stopped
+		@info = "#{info[:exec]} execve"
+
+		initialize_newpid
+		# XXX will receive a SIGTRAP, could hide it..
+
+		callback_exec[info] if callback_exec
+		# calling continue() here will loop back to TRAP+INFO_EXEC
+	end
+
+	def break(&b)
+		@breaking = b || true
+		kill 'STOP'
 	end
 
 	def kill(sig=nil)
-		sig = 9 if not sig or sig == ''
-		sig = PTrace::SIGNAL[sig] || sig.to_i
-		@threads.each_key { |tid| ::Process.kill(sig, tid) }
-		@state = :running
+		return if not tid
+		# XXX tkill ?
+		::Process.kill(sig2signr(sig), tid)
+	rescue Errno::ESRCH
 	end
 
-	def detach
-		# TODO detach only current thread ?
-		super()
-		@threads.each_key { |tid|
-			@ptrace.pid = tid
-			@ptrace.detach
-		}
-		@threads.clear
-		@state = :dead
-		@info = 'detached'
-	end
-
-	def bpx(addr, *a)
-		return hwbp(addr, :x, 1, *a) if @has_pax
-		super(addr, *a)
-	end
-
-	def syscall(arg=nil)
-		return if @state != :stopped
-		check_pre_run
-		@state = :running
-		@info = 'syscall'
-		@target_syscall = arg
-		sig = parse_run_signal(nil)
-		@threads.each { |tid, tdata|
-			next if tdata[:state] != :stopped
-			tdata[:state] = :running
-			@ptrace.pid = tid
-			@ptrace.syscall(sig)
-		}
-		@ptrace.pid = @tid
-	end
-
-	def enable_bp(addr)
-		return if not b = @breakpoint[addr]
-		case b.type
-		when :bpx
-			begin
-				@cpu.dbg_enable_bp(self, addr, b)
-			rescue ::Errno::EIO
-				@memory[addr, 1]	# check if we can read
-				# if yes, it's a PaX-style config
-				@has_pax = true
-				b.type = :hw
-				b.mtype = :x
-				b.mlen = 1
-				@cpu.dbg_enable_bp(self, addr, b)
-			end
-		when :hw
-			@cpu.dbg_enable_bp(self, addr, b)
+	def pass_current_exception(bool=true)
+		if bool
+			@continuesignal = @saved_csig
+		else
+			@continuesignal = 0
 		end
-		b.state = :active
 	end
 
-	def disable_bp(addr)
-		return if not b = @breakpoint[addr]
-		@cpu.dbg_disable_bp(self, addr, b)
-		b.state = :inactive
+	def sig2signr(sig)
+		case sig
+		when nil, ''; 9
+		when Integer; sig
+		when String
+			sig = sig.upcase.sub(/^SIG_?/, '')
+			PTrace::SIGNAL[sig] || Integer(sig)
+		else raise "unhandled signal #{sig.inspect}"
+		end
+	end
+
+	# stop debugging the current process
+	def detach
+		if @state == :running
+			# must be stopped so we can rm bps
+			self.break { detach }
+			mypid = @pid
+			wait_target
+
+			# after syscall(), wait will return once for interrupted syscall,
+			# and we need to wait more for the break callback to kick in
+			if @pid == mypid and @state == :stopped and @info =~ /syscall/
+				do_continue
+				check_target
+			end
+
+			return
+		end
+		del_all_breakpoints
+		each_tid {
+			@ptrace.pid = @tid
+			@ptrace.detach rescue nil
+			@delete_thread = true
+		}
+		del_pid
+	end
+
+	def bpx(addr, *a, &b)
+		return hwbp(addr, :x, 1, *a, &b) if @has_pax_mprotect
+		super(addr, *a, &b)
+	end
+
+	# handles exceptions from PaX-style mprotect restrictions on bpx,
+	# transmute them to hwbp on the fly
+	def do_enable_bp(b)
+		super(b)
+	rescue ::Errno::EIO
+		if b.type == :bpx
+			@memory[b.address, 1]	# check if we can read
+			# didn't raise: it's a PaX-style config
+			@has_pax_mprotect = true
+			b.del
+			hwbp(b.address, :x, 1, b.oneshot, b.condition, &b.action)
+			log 'PaX: bpx->hwbp'
+		else raise
+		end
 	end
 
 	def ui_command_setup(ui)
 		ui.new_command('syscall', 'waits for the target to do a syscall using PT_SYSCALL') { |arg| ui.wrap_run { syscall arg } }
 		ui.keyboard_callback[:f6] = lambda { ui.wrap_run { syscall } }
 
-		ui.new_command('threads_raw', 'list threads from the OS') { puts get_thread_list(@pid).join(', ') }
-		ui.new_command('threads', 'list threads') { @threads.each { |t, s| puts "#{t} #{s[:state]}" } }
-		ui.new_command('tid', 'set/get current thread id') { |arg|
-			if arg.strip == ''; puts self.tid
-			else self.tid = arg.to_i
-			end
-		}
-		ui.new_command('stop_on_threadcreate') { |arg| @stop_on_threadcreate = ((arg =~ /1|true|y/i) ? true : false) }
-		ui.new_command('stop_on_threadexit')   { |arg| @stop_on_threadexit   = ((arg =~ /1|true|y/i) ? true : false) }
 		ui.new_command('signal_cont', 'set/get the continue signal (0 == unset)') { |arg|
-			case arg.strip
-			when ''; puts @continuesignal
-			when /^\d+$/; @continuesignal = arg.to_i
-			else @continuesignal = arg.strip.upcase.sub(/^SIG_?/, '')
-			end
-		}
-		ui.new_command('trace_children', 'set/get the children tracing state') { |arg|
-			case arg.strip.downcase
-			when ''; puts self.trace_children
-			when '0', 'false', 'no'; self.trace_children = false
-			when '1', 'true', 'yes'; self.trace_children = true
-			else raise 'trace_children: bad value, set to "true" or "false"'
-			end
-		}
-	end
-end
-
-class LinuxRemoteString < VirtualString
-	attr_accessor :pid, :readfd, :invalid_addr
-	attr_accessor :dbg
-
-	# returns a virtual string proxying the specified process memory range
-	# reads are cached (4096 aligned bytes read at once), from /proc/pid/mem
-	# writes are done directly by ptrace
-	def initialize(pid, addr_start=0, length=nil, dbg=nil)
-		@pid = pid
-		length ||= 1 << (LinOS.open_process(@pid).addrsz rescue 32)
-		@readfd = File.open("/proc/#@pid/mem", 'rb') rescue nil
-		@dbg = dbg if dbg
-		@invalid_addr = false
-		super(addr_start, length)
-	end
-
-	def dup(addr = @addr_start, len = @length)
-		self.class.new(@pid, addr, len, dbg)
-	end
-
-	def do_ptrace
-		if dbg
-			if @dbg.state == :stopped
-				yield @dbg.ptrace
-			end
-		else
-			PTrace.open(@pid) { |ptrace| yield ptrace }
-		end
-	end
-
-	def rewrite_at(addr, data)
-		# target must be stopped
-		do_ptrace { |ptrace| ptrace.writemem(addr, data) }
-	end
-
-	def get_page(addr, len=@pagelength)
-		do_ptrace {
-			begin
-				if readfd
-					#addr = [addr].pack('q').unpack('q').first if addr >= 1<<63
-					return if addr >= 1 << 63	# XXX ruby bug ?
-					@readfd.pos = addr
-					@readfd.read len
-				else
-					@dbg.ptrace.readmem(addr, len)
-				end
-			rescue Errno::EIO, Errno::ESRCH
-				nil
+			case arg.to_s.strip
+			when ''; log "#{@continuesignal} (#{PTrace::SIGNAL[@continuesignal]})"
+			else @continuesignal = sig2signr(arg)
 			end
 		}
 	end

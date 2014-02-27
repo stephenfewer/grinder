@@ -685,7 +685,7 @@ TrackMouseEvent(
 #define QS_ALLEVENTS       (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY)
 #define QS_ALLINPUT        (QS_ALLEVENTS | QS_SENDMESSAGE)
 
-#define WAIT_TIMEOUT        258L 
+#define WAIT_TIMEOUT        258L
 
 #define CF_TEXT             1
 #define CF_BITMAP           2
@@ -960,6 +960,33 @@ GetTextExtentPoint32A(
 	__in_ecount(c) LPCSTR lpString,
 	__in int c,
 	__out LPPOINT lpsz);
+
+typedef struct tagRECT {
+    LONG left;
+    LONG top;
+    LONG right;
+    LONG bottom;
+} RECT, *LPRECT;
+
+#define TPM_LEFTBUTTON  0x0000L
+#define TPM_RIGHTBUTTON 0x0002L
+#define TPM_LEFTALIGN   0x0000L
+#define TPM_CENTERALIGN 0x0004L
+#define TPM_RIGHTALIGN  0x0008L
+#define TPM_TOPALIGN        0x0000L
+#define TPM_VCENTERALIGN    0x0010L
+#define TPM_BOTTOMALIGN     0x0020L
+#define TPM_HORIZONTAL      0x0000L
+#define TPM_VERTICAL        0x0040L
+#define TPM_NONOTIFY        0x0080L
+#define TPM_RETURNCMD       0x0100L
+#define TPM_RECURSE         0x0001L
+#define TPM_HORPOSANIMATION 0x0400L
+#define TPM_HORNEGANIMATION 0x0800L
+#define TPM_VERPOSANIMATION 0x1000L
+#define TPM_VERNEGANIMATION 0x2000L
+#define TPM_NOANIMATION     0x4000L
+#define TPM_LAYOUTRTL       0x8000L
 WINUSERAPI
 BOOL
 WINAPI
@@ -980,6 +1007,17 @@ WINAPI
 DestroyMenu(
     __in HMENU hMenu);
 WINUSERAPI
+BOOL
+WINAPI
+TrackPopupMenu(
+    __in HMENU hMenu,
+    __in UINT uFlags,
+    __in int x,
+    __in int y,
+    __in int nReserved,
+    __in HWND hWnd,
+    __in_opt CONST RECT *prcRect);
+WINUSERAPI
 DWORD
 WINAPI
 CheckMenuItem(
@@ -998,13 +1036,6 @@ AppendMenuA(
 #define TRANSPARENT 1
 #define OPAQUE      2
 int WINAPI SetBkMode(__in HDC hdc, __in int mode);
-
-typedef struct tagRECT {
-    LONG left;
-    LONG top;
-    LONG right;
-    LONG bottom;
-} RECT, *LPRECT;
 
 WINUSERAPI
 int
@@ -1086,6 +1117,18 @@ UpdateWindow(
 WINUSERAPI
 BOOL
 WINAPI
+ClientToScreen(
+    __in HWND hWnd,
+    __inout LPPOINT pt);
+WINUSERAPI
+BOOL
+WINAPI
+ScreenToClient(
+    __in HWND hWnd,
+    __inout LPPOINT pt);
+WINUSERAPI
+BOOL
+WINAPI
 GetClientRect(
     __in HWND hWnd,
     __out LPRECT lpRect);
@@ -1110,6 +1153,15 @@ AdjustWindowRectEx(
     __in DWORD dwStyle,
     __in BOOL bMenu,
     __in DWORD dwExStyle);
+#define PS_SOLID            0
+#define PS_DASH             1       /* -------  */
+#define PS_DOT              2       /* .......  */
+#define PS_DASHDOT          3       /* _._._._  */
+#define PS_DASHDOTDOT       4       /* _.._.._  */
+#define PS_NULL             5
+#define PS_INSIDEFRAME      6
+#define PS_USERSTYLE        7
+#define PS_ALTERNATE        8
 DWORD WINAPI SetTextColor(__in HDC hdc, __in DWORD color);
 BOOL WINAPI TextOutA( __in HDC hdc, __in int x, __in int y, __in_ecount(c) LPCSTR lpString, __in int c);
 BOOL WINAPI MoveToEx( __in HDC hdc, __in int x, __in int y, __out_opt LPPOINT lppt);
@@ -1118,8 +1170,10 @@ BOOL WINAPI Rectangle(__in HDC hdc, __in int left, __in int top, __in int right,
 HANDLE WINAPI SelectObject(__in HDC hdc, __in HANDLE h);
 BOOL WINAPI DeleteObject(__in HANDLE ho);
 DWORD WINAPI SetBkColor(__in HDC hdc, __in DWORD color);
-DWORD WINAPI SetDCBrushColor(__in HDC hdc, __in DWORD color);
-DWORD WINAPI SetDCPenColor(__in HDC hdc, __in DWORD color);
+HANDLE WINAPI CreateSolidBrush(__in DWORD color);
+//DWORD WINAPI SetDCBrushColor(__in HDC hdc, __in DWORD color);
+HANDLE WINAPI CreatePen(__in int style, __in int width, __in DWORD color);
+//DWORD WINAPI SetDCPenColor(__in HDC hdc, __in DWORD color);
 int WINAPI FillRect(__in HDC hDC, __in CONST RECT *lprc, __in HBRUSH hbr);
 
 WINUSERAPI HWND WINAPI GetCapture(VOID);
@@ -1201,9 +1255,9 @@ typedef struct tagOFNA {
    LPARAM       lCustData;
    LPVOID       lpfnHook;
    LPCSTR       lpTemplateName;
-   void *       pvReserved;
-   DWORD        dwReserved;
-   DWORD        FlagsEx;
+   //void *       pvReserved;	// undef for win98 compat
+   //DWORD        dwReserved;
+   //DWORD        FlagsEx;
 } OPENFILENAMEA, *LPOPENFILENAMEA;
 BOOL WINAPI GetOpenFileNameA(LPOPENFILENAMEA);
 BOOL WINAPI GetSaveFileNameA(LPOPENFILENAMEA);
@@ -1289,6 +1343,28 @@ WINAPI BOOL DragQueryPoint(HDROP,LPPOINT);
 WINAPI void DragFinish(HDROP);
 WINAPI void DragAcceptFiles(HWND,BOOL);
 EOS
+
+def self.last_error_msg(errno = getlasterror)
+	message = ' '*512
+	if formatmessagea(FORMAT_MESSAGE_FROM_SYSTEM, nil, errno, 0, message, message.length, nil) == 0
+		message = 'unknown error %x' % errno
+	else
+		message = message[0, message.index(?\0)] if message.index(?\0)
+		message.chomp!
+	end
+	message
+end
+
+def self.setdcbrushcolor(hdc, col)
+	@@brushes ||= {}
+	b = @@brushes[col] ||= createsolidbrush(col)
+	selectobject(hdc, b)
+end
+def self.setdcpencolor(hdc, col)
+	@@pens ||= {}
+	p = @@pens[col] ||= createpen(PS_SOLID, 0, col)
+	selectobject(hdc, p)
+end
 end
 
 module Protect
@@ -1357,11 +1433,11 @@ class WinWidget
 		return if not @parent
 		@parent.set_focus(self) if @parent.respond_to? :set_focus
 	end
-	
+
 	def focus?
 		return true if not @parent
 		(@parent.respond_to?(:focus?) ? @parent.focus? : true) and
- 		(@parent.respond_to?(:has_focus?) ? @parent.has_focus?(self) : true)
+		(@parent.respond_to?(:has_focus?) ? @parent.has_focus?(self) : true)
 	end
 
 	def redraw
@@ -1451,6 +1527,7 @@ class ContainerChoiceWidget < WinWidget
 
 	def set_focus(c)
 		@curview = c
+		grab_focus
 		redraw
 	end
 end
@@ -1486,7 +1563,7 @@ class ContainerVBoxWidget < WinWidget
 		cy = 0
 		pv = []
 		@views.each_with_index { |v, i|
-			if y >= cy and y < cy + v.height
+			if y >= cy+1 and y < cy + v.height - 1
 				if @focus_idx != i
 					@focus_idx = i
 					redraw
@@ -1495,8 +1572,7 @@ class ContainerVBoxWidget < WinWidget
 				return
 			end
 			cy += v.height
-			if y >= cy and y < cy+@spacing
-				vsz = v
+			if y >= cy-1 and y < cy+@spacing+1
 				@resizing = v
 				@wantheight[@resizing] ||= v.height
 				@tmpwantheight = []
@@ -1632,12 +1708,13 @@ class ContainerVBoxWidget < WinWidget
 
 	def set_focus(c)
 		@focus_idx = @views.index(c)
+		grab_focus
 		redraw
 	end
 end
 
 module TextWidget
-	attr_accessor :caret_x, :caret_y, :hl_word, :font_width, :font_height
+	attr_accessor :caret_x, :caret_y, :hl_word, :hl_word_re, :font_width, :font_height
 
 	def initialize_text
 		@caret_x = @caret_y = 0		# text cursor position
@@ -1646,11 +1723,21 @@ module TextWidget
 		@hl_word = nil
 	end
 
-	def update_hl_word(line, offset)
+	def update_hl_word(line, offset, mode=:asm)
 		return if not line
 		word = line[0...offset].to_s[/\w*$/] << line[offset..-1].to_s[/^\w*/]
 		word = nil if word == ''
-		@hl_word = word if @hl_word != word
+		if @hl_word != word
+			if word
+				if mode == :asm and defined?(@dasm) and @dasm
+					re = @dasm.gui_hilight_word_regexp(word)
+				else
+					re = Regexp.escape(word)
+				end
+				@hl_word_re = /^(.*?)(\b(?:#{re})\b)/
+			end
+			@hl_word = word
+		end
 	end
 
 	def set_caret_from_click(x, y)
@@ -1704,7 +1791,15 @@ end
 class DrawableWidget < WinWidget
 	include TextWidget
 
-	attr_accessor :buttons
+	BasicColor = {	:white => 'fff', :palegrey => 'ddd', :black => '000', :grey => '444',
+			:red => 'f44', :darkred => '800', :palered => 'faa',
+			:green => '4f4', :darkgreen => '080', :palegreen => 'afa',
+			:blue => '44f', :darkblue => '008', :paleblue => 'aaf',
+			:yellow => 'ff4', :darkyellow => '440', :paleyellow => 'ffa',
+			:orange => 'fc8',
+	}
+	attr_accessor :buttons, :parent_widget
+	attr_accessor :default_color_association
 
 	def initialize(*a, &b)
 		@color = {}
@@ -1721,12 +1816,7 @@ class DrawableWidget < WinWidget
 	end
 
 	def initialize_visible_
-		{ :white => 'fff', :palegrey => 'ddd', :black => '000', :grey => '444',
-			:red => 'f00', :darkred => '800', :palered => 'fcc',
-			:green => '0f0', :darkgreen => '080', :palegreen => 'cfc',
-			:blue => '00f', :darkblue => '008', :paleblue => 'ccf',
-			:yellow => 'ff0', :darkyellow => '440', :paleyellow => 'ffc',
-		}.each { |tag, val|
+		BasicColor.each { |tag, val|
 			@color[tag] = color(val)
 		}
 		@color[:winbg] = Win32Gui.getsyscolor(Win32Gui::COLOR_BTNFACE)
@@ -1735,9 +1825,22 @@ class DrawableWidget < WinWidget
 		initialize_visible if respond_to? :initialize_visible
 	end
 
-	def set_color_association(h)
-		h.each { |k, v| @color[k] = color(v) }
+	def set_color_association(hash)
+		hord = Hash.new { |h, k| h[k] = (hash[k] ? h[hash[k]] + 1 : 0) }
+		hash.sort_by { |k, v| hord[k] }.each { |k, v| @color[k] = color(v) }
 		gui_update
+	end
+
+	def new_menu
+		toplevel.new_menu
+	end
+
+	def addsubmenu(*a, &b)
+		toplevel.addsubmenu(*a, &b)
+	end
+
+	def popupmenu(m, x, y)
+		toplevel.popupmenu(m, (x+@x).to_i, (y+@y).to_i)
 	end
 
 	def paint_(realhdc)
@@ -1780,7 +1883,7 @@ class DrawableWidget < WinWidget
 	end
 
 	def color(col)
-		@color[col] ||= col.sub(/^(\w)(\w)(\w)$/, '\\3\\3\\2\\2\\1\\1').to_i(16)
+		@color[col] ||= col.sub(/^(\w\w)(\w\w)(\w\w)$/, '\\3\\2\\1').sub(/^(\w)(\w)(\w)$/, '\\3\\3\\2\\2\\1\\1').to_i(16)
 	end
 
 	def draw_color(col)
@@ -1820,8 +1923,34 @@ class DrawableWidget < WinWidget
 		draw_string(x, y, text)
 	end
 
-	def kbd_shift
-		Win32Gui.getkeystate(Win32Gui::VK_SHIFT) & 0x8000 > 0
+	# same as draw_string_color + hilight @hl_word_re
+	def draw_string_hl(col, x, y, str)
+		if @hl_word
+			while str =~ @hl_word_re
+				s1, s2 = $1, $2
+				draw_string_color(col, x, y, s1)
+				x += s1.length*@font_width
+				hl_w = s2.length*@font_width
+				draw_rectangle_color(:hl_word_bg, x, y, hl_w, @font_height)
+				draw_string_color(:hl_word, x, y, s2)
+				x += hl_w
+				str = str[s1.length+s2.length..-1]
+			end
+		end
+		draw_string_color(col, x, y, str)
+	end
+
+	def keyboard_state(query=nil)
+		case query
+		when :control, :ctrl
+			Win32Gui.getkeystate(Win32Gui::VK_CONTROL) & 0x8000 > 0
+		when :shift
+			Win32Gui.getkeystate(Win32Gui::VK_SHIFT) & 0x8000 > 0
+		when :alt
+			Win32Gui.getkeystate(Win32Gui::VK_MENU) & 0x8000 > 0
+		else
+			[:control, :shift, :alt].find_all { |s| keyboard_state(s) }
+		end
 	end
 
 # represents a clickable area with a label (aka button)
@@ -1910,10 +2039,10 @@ class Window
 				:style => Win32Gui::CS_DBLCLKS,
 				:hcursor => Win32Gui.loadcursora(0, Win32Gui::IDC_ARROW),
 				:lpszclassname => cname,
-  				:lpfnwndproc => Win32Gui.callback_alloc_c('__stdcall int wndproc(int, int, int, int)') { |hwnd, msg, wp, lp| windowproc(hwnd, msg, wp, lp) }
+				:lpfnwndproc => Win32Gui.callback_alloc_c('__stdcall int wndproc(int, int, int, int)') { |hwnd, msg, wp, lp| windowproc(hwnd, msg, wp, lp) }
 
 		Win32Gui.registerclassexa(cls)
-		
+
 		@hwnd = Win32Gui.createwindowexa(win32styleex, cname, 'win32gui window', win32style, Win32Gui::CW_USEDEFAULT, Win32Gui::SW_HIDE, Win32Gui::CW_USEDEFAULT, 0, 0, 0, 0, 0)
 
 		initialize_window(*a, &b)
@@ -1937,6 +2066,17 @@ class Window
 		Win32Gui.updatewindow(@hwnd)
 	end
 
+	def keyboard_state(query=nil)
+		case query
+		when :control, :ctrl
+			Win32Gui.getkeystate(Win32Gui::VK_CONTROL) & 0x8000 > 0
+		when :shift
+			Win32Gui.getkeystate(Win32Gui::VK_SHIFT) & 0x8000 > 0
+		when :alt
+			Win32Gui.getkeystate(Win32Gui::VK_MENU) & 0x8000 > 0
+		end
+	end
+
 	# keypress event keyval traduction table
 	Keyboard_trad = Win32Gui.cp.lexer.definition.keys.grep(/^VK_/).inject({}) { |h, cst|
 		v = Win32Gui.const_get(cst)
@@ -1944,7 +2084,8 @@ class Window
 		h.update v => {
 			:prior => :pgup, :next => :pgdown,
 			:escape => :esc, :return => :enter,
-			:back => :backspace,
+			:back => :backspace, :apps => :popupmenu,
+			:add => ?+, :subtract => ?-, :multiply => ?*, :divide => ?/,
 		}.fetch(key, key)
 	}
 
@@ -2000,7 +2141,9 @@ class Window
 		when Win32Gui::WM_KEYDOWN, Win32Gui::WM_SYSKEYDOWN
 			# SYSKEYDOWN for f10 (default = activate the menu bar)
 			if key = Keyboard_trad[wparam]
-				if Win32Gui.getkeystate(Win32Gui::VK_CONTROL) & 0x8000 > 0
+				if [?+, ?-, ?/, ?*].include?(key)
+					# keypad keys generate wm_keydown + wm_char, ignore this one
+				elsif keyboard_state(:control)
 					@widget.keypress_ctrl_(key) if @widget
 				else
 					@widget.keypress_(key) if @widget
@@ -2008,20 +2151,18 @@ class Window
 			end
 			Win32Gui.defwindowproca(hwnd, msg, wparam, lparam) if key != :f10	# alt+f4 etc
 		when Win32Gui::WM_CHAR
-			if Win32Gui.getkeystate(Win32Gui::VK_CONTROL) & 0x8000 > 0 and not
-			   Win32Gui.getkeystate(Win32Gui::VK_MENU) & 0x8000 > 0			# altgr+[ returns CTRL on..
-				shift = (Win32Gui.getkeystate(Win32Gui::VK_SHIFT) & 0x8000 > 0)
+			if keyboard_state(:control) and not keyboard_state(:alt)	# altgr+[ returns CTRL on..
 				if ?a.kind_of?(String)
-					wparam += (shift ? ?A.ord : ?a.ord) - 1 if wparam < 0x1a
-					k = wparam.chr
+					wparam += (keyboard_state(:shift) ? ?A.ord : ?a.ord) - 1 if wparam < 0x1a
+					key = wparam.chr
 				else
-					wparam += (shift ? ?A : ?a) - 1 if wparam < 0x1a
-					k = wparam
+					wparam += (keyboard_state(:shift) ? ?A : ?a) - 1 if wparam < 0x1a
+					key = wparam
 				end
-				@widget.keypress_ctrl_(k) if @widget
+				@widget.keypress_ctrl_(key) if @widget
 			else
-				k = (?a.kind_of?(String) ? wparam.chr : wparam)
-				@widget.keypress_(k) if @widget
+				key = (?a.kind_of?(String) ? wparam.chr : wparam)
+				@widget.keypress_(key) if @widget
 			end
 		when Win32Gui::WM_DESTROY
 			destroy_window
@@ -2060,7 +2201,7 @@ class Window
 		when Win32Gui::WM_LBUTTONDBLCLK
 			:doubleclick
 		when Win32Gui::WM_MOUSEWHEEL
-			off = Expression.make_signed(wparam >> 16, 16)
+			off = Expression.make_signed((wparam >> 16) & 0xffff, 16)
 			dir = off > 0 ? :up : :down
 			if ctrl
 				return(@widget.mouse_wheel_ctrl(dir, x-@clientx, y-@clienty) if @widget.respond_to? :mouse_wheel_ctrl)
@@ -2163,10 +2304,37 @@ class Window
 
 	# make the window's MenuBar reflect the content of @menu
 	def update_menu
+		unuse_menu(@menu)
 		Win32Gui.destroymenu(@menuhwnd) if @menuhwnd != 0
 		@menuhwnd = Win32Gui.createmenu()
 		@menu.each { |e| create_menu_item(@menuhwnd, e) }
 		Win32Gui.setmenu(@hwnd, @menuhwnd)
+	end
+
+	def popupmenu(m, x, y)
+		hm = Win32Gui.createpopupmenu()
+		m.each { |e| create_menu_item(hm, e) }
+		pt = Win32Gui.alloc_c_struct('POINT', :x => x, :y => y)
+		Win32Gui.clienttoscreen(@hwnd, pt)
+		id = Win32Gui.trackpopupmenu(hm, Win32Gui::TPM_NONOTIFY | Win32Gui::TPM_RETURNCMD, pt.x, pt.y, 0, @hwnd, 0)
+		if p = @control_action[id]
+			# TrackPopup returns before WM_COMMAND is delivered, so if we
+			# want to cleanup @control_action we must call it now & clenup
+			p.call
+		end
+		unuse_menu(m)
+		Win32Gui.destroymenu(hm)
+	end
+
+	def unuse_menu(m)
+		m.flatten.grep(Proc).reverse_each { |c|
+			if @control_action[@controlid-1] == c
+				@controlid -= 1		# recycle IDs
+				@control_action.delete @controlid
+			elsif i = @control_action.index(c)
+				@control_action.delete i
+			end
+		}
 	end
 
 	def create_menu_item(menu, entry)
@@ -2219,6 +2387,7 @@ class Window
 					checked = action.call(!checked)
 					Win32Gui.checkmenuitem(menu, id, (checked ? Win32Gui::MF_CHECKED : Win32Gui::MF_UNCHECKED))
 				}
+				entry << @control_action[id]	# allow deletion in unuse_menu
 			end
 			@controlid += 1
 		end
@@ -2230,6 +2399,9 @@ class Window
 	def title=(t)
 		@title = t
 		Win32Gui.setwindowtexta(@hwnd, @title)
+	end
+
+	def initialize_window
 	end
 end
 
@@ -2275,7 +2447,7 @@ class OpenFile
 		buf = [0].pack('C')*512
 		ofn = Win32Gui.alloc_c_struct 'OPENFILENAMEA',
 			:lstructsize => :size,
-  			#:hwndowner => win.hwnd,	# 0 for nonmodal
+			#:hwndowner => win.hwnd,	# 0 for nonmodal
 			:lpstrfilter => "All Files\0*.*\0\0",
 			:lpstrfile => buf,
 			:lpstrtitle => title,
@@ -2315,6 +2487,10 @@ class IBoxWidget < DrawableWidget
 		@oldsel_x = @caret_x_select = 0
 		@caret_x = @curline.length
 		@caret_x_start = 0
+		@@history ||= {}
+		histkey = opts[:history] || label[0, 10]
+		@history = (@@history[histkey] ||= [])
+		@history_off = @history.length
 
 		add_button('Ok', :btnc1, :btnc2) { keypress(:enter) }
 		add_button('Cancel', :btnc1, :btnc2) { keypress(:esc) }
@@ -2420,7 +2596,7 @@ class IBoxWidget < DrawableWidget
 	def keypress(key)
 		case key
 		when :left
-			if kbd_shift
+			if keyboard_state(:shift)
 				@caret_x_select ||= @caret_x
 			else
 				@caret_x_select = nil
@@ -2428,7 +2604,7 @@ class IBoxWidget < DrawableWidget
 			@caret_x -= 1 if @caret_x > 0
 			update_caret
 		when :right
-			if kbd_shift
+			if keyboard_state(:shift)
 				@caret_x_select ||= @caret_x
 			else
 				@caret_x_select = nil
@@ -2436,7 +2612,7 @@ class IBoxWidget < DrawableWidget
 			@caret_x += 1 if @caret_x < @curline.length
 			update_caret
 		when :home
-			if kbd_shift
+			if keyboard_state(:shift)
 				@caret_x_select ||= @caret_x
 			else
 				@caret_x_select = nil
@@ -2444,14 +2620,26 @@ class IBoxWidget < DrawableWidget
 			@caret_x = 0
 			update_caret
 		when :end
-			if kbd_shift
+			if keyboard_state(:shift)
 				@caret_x_select ||= @caret_x
 			else
 				@caret_x_select = nil
 			end
 			@caret_x = @curline.length
 			update_caret
+		when :up, :down
+			if @history_off < @history.length or @curline.strip != @history.last
+				@history[@history_off] = @curline.strip
+			end
+			@history_off += (key == :up ? -1 : 1)
+			@history_off %= @history.length
+			@curline = @history[@history_off].to_s
+			@caret_x = @curline.length if @caret_x > @curline.length
+			redraw
 		when :enter
+			@history << @curline.strip
+			@history.pop if @history.last == ''
+			@history.pop if @history.last == @history[-2]
 			destroy
 			Gui.main_iter
 			protect { @action.call(@curline.strip) }
@@ -2511,7 +2699,6 @@ class IBoxWidget < DrawableWidget
 
 	def mousemove(x, y)
 		if @textdown
-			x = Expression.make_signed(x, 16)
 			x = x.to_i / @font_width - 1 + @caret_x_start
 			x = [[x, 0].max, @curline.length].min
 			if x != @textdown
@@ -2524,7 +2711,6 @@ class IBoxWidget < DrawableWidget
 
 	def mouserelease(x, y)
 		if @textdown
-			x = Expression.make_signed(x, 16)
 			x = x.to_i / @font_width - 1 + @caret_x_start
 			x = [[x, 0].max, @curline.length].min
 			if x != @textdown
@@ -2536,7 +2722,7 @@ class IBoxWidget < DrawableWidget
 		elsif mouserelease_buttons(x, y)
 		end
 	end
-	
+
 	def update_caret
 		return if @oldcaret_x == @caret_x and @oldsel_x == @caret_x_select
 		redraw
@@ -2647,7 +2833,11 @@ class LBoxWidget < DrawableWidget
 	def paint
 		@btnx = []
 		@btny = 0
-		@btnheight = @font_height * 4/3
+		if @btnheight != @font_height * 4/3
+			# fix vscrollbar height on w7
+			@btnheight = @font_height * 4/3
+			resized(width, height)
+		end
 		x = 0
 		@colw.each { |w|
 			@btnx << x
@@ -2765,7 +2955,6 @@ class LBoxWidget < DrawableWidget
 			vscroll((@linehead-off)*@font_height)
 			redraw
 		when :down
-			n = @lineshown-1
 			off = [@lineshown, [@lineshown/2, 5].max].min
 			vscroll((@linehead+off)*@font_height)
 			redraw
@@ -2830,7 +3019,6 @@ class LBoxWidget < DrawableWidget
 	def mousemove(x, y)
 		if @btndown.compact.first
 			@btndown = []
-			x = Expression.make_signed(x, 16)
 			@btndown[xtobtn(x)] = true
 			redraw
 		end
@@ -2838,7 +3026,6 @@ class LBoxWidget < DrawableWidget
 
 	def mouserelease(x, y)
 		if @btndown.compact.first
-			x = Expression.make_signed(x, 16)
 			@btndown = []
 			col = xtobtn(x)
 			cursel = @list[@linesel] if @linesel
@@ -2857,7 +3044,7 @@ class LBoxWidget < DrawableWidget
 			redraw
 		end
 	end
-	
+
 	def destroy
 		@parent.destroy
 	end
@@ -2893,7 +3080,7 @@ end
 			Win32Gui.getscrollinfo(@hwnd, Win32Gui::SB_VERT, sif)
 			case wparam & 0xffff
 			when Win32Gui::SB_THUMBPOSITION; val = sif.ntrackpos
-			when Win32Gui::SB_THUMBTRACK; val = sif.ntrackpos; nopos = true
+			when Win32Gui::SB_THUMBTRACK; val = sif.ntrackpos #; nopos = true
 			when Win32Gui::SB_LINEDOWN; val = sif.npos + 1
 			when Win32Gui::SB_LINEUP;   val = sif.npos - 1
 			when Win32Gui::SB_PAGEDOWN; val = sif.npos + sif.npage
@@ -2914,7 +3101,9 @@ def Gui.main
 		if Win32Gui.peekmessagea(msg, 0, 0, 0, Win32Gui::PM_NOREMOVE) != 0 or
 				Win32Gui.msgwaitformultipleobjects(0, 0, Win32Gui::FALSE, 500,
 					Win32Gui::QS_ALLINPUT) != Win32Gui::WAIT_TIMEOUT
-			break if Win32Gui.getmessagea(msg, 0, 0, 0) == 0
+			ret = Win32Gui.getmessagea(msg, 0, 0, 0)
+			break if ret == 0
+			raise Win32Gui.last_error_msg if ret < 0
 			Win32Gui.translatemessage(msg)
 			Win32Gui.dispatchmessagea(msg)
 		end

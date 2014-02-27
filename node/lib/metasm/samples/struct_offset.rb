@@ -12,12 +12,13 @@ require 'metasm'
 include Metasm
 
 require 'optparse'
-opts = { :hdrs => [], :defs => {}, :path => [], :cpu => 'X86' }
+opts = { :hdrs => [], :defs => {}, :path => [], :cpu => 'X86', :offbase => 16 }
 OptionParser.new { |opt|
 	opt.on('-o outfile') { |f| opts[:outfile] = f }
 	opt.on('-H additional_header') { |f| opts[:hdrs] << f }
 	opt.on('-I path', '--includepath path') { |f| opts[:path] << f }
 	opt.on('-D var') { |f| k, v = f.split('=', 2) ; opts[:defs].update k => (v || '') }
+	opt.on('-d') { opts[:offbase] = 10 }
 	opt.on('--cpu CpuClass') { |c| opts[:cpu] = c }
 	opt.on('--gcc') { opts[:gcc] = true }
 	opt.on('--vs', '--visualstudio') { opts[:vs] = true }
@@ -42,17 +43,5 @@ cp.parse_file(ARGV.shift)
 $stdout.reopen File.open(opts[:outfile], 'w') if opts[:outfile]
 
 ARGV.each { |structname|
-	st = cp.toplevel.struct[structname] || cp.toplevel.symbol[structname]
-	st = st.type while st.kind_of? Metasm::C::Pointer or st.kind_of? Metasm::C::TypeDef
-	if not st.kind_of? C::Struct
-		puts "// unknown #{structname}", ''
-		next
-	end
-	
-	puts "// #{structname}" if not st.name
-	puts "struct #{st.name} { // size = #{cp.sizeof(st)}"
-	st.members.each { |m|
-		puts "\t#{m.type.to_s[1..-2]} #{m.name if m.name}; // +#{st.offsetof(cp, m.name)}"
-	}
-	puts '};', ''
+	puts cp.alloc_c_struct(structname)
 }

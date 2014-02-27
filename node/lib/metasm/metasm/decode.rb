@@ -134,9 +134,10 @@ class EncodedData
 	# bytes from rawsize to virtsize are returned as zeroes
 	# ignores self.relocations
 	def read(len=@virtsize-@ptr)
-		len = @virtsize-@ptr if len > @virtsize-@ptr
-		str = (@ptr < @data.length) ? @data[@ptr, len] : ''
-		str = str.to_str.ljust(len, "\0") if str.length < len
+		vlen = len
+		vlen = @virtsize-@ptr if len > @virtsize-@ptr
+		str = (@ptr < @data.length) ? @data[@ptr, vlen] : ''
+		str = str.to_str.ljust(vlen, "\0") if str.length < vlen
 		@ptr += len
 		str
 	end
@@ -166,7 +167,7 @@ class Expression
 	def self.decode_imm(str, type, endianness, off=0)
 		type = INT_SIZE.keys.find { |k| k.to_s[0] == ?a and INT_SIZE[k] == 8*type } if type.kind_of? ::Integer
 		endianness = endianness.endianness if not endianness.kind_of? ::Symbol
-		str = str[off, INT_SIZE[type]/8]
+		str = str[off, INT_SIZE[type]/8].to_s
 		str = str.reverse if endianness == :little
 		val = str.unpack('C*').inject(0) { |val_, b| (val_ << 8) | b }
 		val = make_signed(val, INT_SIZE[type]) if type.to_s[0] == ?i
@@ -182,7 +183,7 @@ class CPU
 	# returns a DecodedInstruction or nil
 	def decode_instruction(edata, addr)
 		@bin_lookaside ||= build_bin_lookaside
-		di = decode_findopcode edata
+		di = decode_findopcode edata if edata.ptr <= edata.length
 		di.address = addr if di
 		di = decode_instr_op(edata, di) if di
 		decode_instr_interpret(di, addr) if di
@@ -208,6 +209,36 @@ class CPU
 	# number of instructions following a jump that are still executed
 	def delay_slot(di=nil)
 		0
+	end
+
+	def disassembler_default_func
+		DecodedFunction.new
+	end
+
+	# return something like backtrace_binding in the forward direction
+	# set pc_reg to some reg name (eg :pc) to include effects on the instruction pointer
+	def get_fwdemu_binding(di, pc_reg=nil)
+		fdi = di.backtrace_binding ||= get_backtrace_binding(di)
+		fdi = fix_fwdemu_binding(di, fdi)
+		if pc_reg
+			if di.opcode.props[:setip]
+				xr = get_xrefs_x(nil, di)
+				if xr and xr.length == 1
+					fdi[pc_reg] = xr[0]
+				else
+					fdi[:incomplete_binding] = Expression[1]
+				end
+			else
+				fdi[pc_reg] = Expression[pc_reg, :+, di.bin_length]
+			end
+		end
+		fdi
+	end
+
+	# patch a forward binding from the backtrace binding
+	# useful only on specific instructions that update a register *and* dereference that register (eg push)
+	def fix_fwdemu_binding(di, fbd)
+		fbd
 	end
 end
 end

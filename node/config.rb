@@ -71,6 +71,10 @@ $swap_fuzzer_count        = 10000
 # Set to nil to disable this feature. Must be greater than 5 minutes.
 $debugger_restart_minutes = 30
 
+# Enable or disable the logging of debug messages from a browser.
+# Note: is left commented out, it will default to true for all browsers except FireFox.
+#$log_debug_messages       = true
+
 # Configure the internet explorer browser...
 # Note: %PROGRAMFILES32% gets resolved to 'Program Files' on 32-bit systems and 'Program Files (x86)' on 64-bit systems.
 $internetexplorer_exe     = 'C:\\%PROGRAM_FILES_32%\\Internet Explorer\\iexplore.exe'

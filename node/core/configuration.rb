@@ -1,8 +1,9 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
+require 'lib/metasm/metasm'
 
 def config_init( config_file )
 
@@ -26,6 +27,16 @@ def config_init( config_file )
 		eval( "$testcase_opts = ::Hash.new" ) if $testcase_opts == nil
 		
 		eval( "$instrument_heap = false" ) if $instrument_heap == nil
+
+		eval( "$log_debug_messages = true" ) if $log_debug_messages == nil
+			
+		eval( "$old_debugger_stackwalk = false" ) if $old_debugger_stackwalk == nil
+		
+		if( $ruby_vm == nil )
+			target = ::Metasm::WinOS.find_process( ::Metasm::WinAPI.getcurrentprocessid() )
+		
+			eval( "$ruby_vm = '#{ target ? target.modules[0].path : 'ruby.exe' }'" )
+		end
 		
 		# patch any global vars here...
 		global_variables.each do | v | 
@@ -41,17 +52,43 @@ def config_init( config_file )
 			end
 			
 			if( res.include?( '%USERNAME%' ) )
+			
 				res = res.gsub( '%USERNAME%', ENV['USERNAME'] )
+				
 				if( res.end_with? '\\' )
 					res << '\\'
 				end
+				
 				eval( "#{ v.to_s } = '#{ res }'" )
+				
 			elsif( res.include?( '%PROGRAM_FILES_32%' ) )
-				res = res.gsub( '%PROGRAM_FILES_32%', wow64 ? 'Program Files (x86)' : 'Program Files' )
-				if( res.end_with? '\\' )
-					res << '\\'
+			
+				some_file = ''
+				
+				if( ::Metasm::WinAPI.host_cpu.size == 32 )
+					# A 32-bit ruby instance...
+					# As we can only fuzz 32-bit processes, default the the hosts 32 program files directory.
+					if( wow64 )
+						some_file = res.gsub( '%PROGRAM_FILES_32%', 'Program Files (x86)' )
+					else
+						some_file = res.gsub( '%PROGRAM_FILES_32%', 'Program Files' )
+					end
+				else
+					# A 64-bit ruby instance...
+					# As we can fuzz both 32-bit and 64-bit processes, see which directory we can use.
+					# First try the 64bit programs dir...
+					some_file = res.gsub( '%PROGRAM_FILES_32%', 'Program Files' )
+					if( not ::File.exist?( some_file ) )
+						# If that file doesn't exist, fall-back to the 32bit programs dir...
+						some_file = res.gsub( '%PROGRAM_FILES_32%', 'Program Files (x86)' )
+					end
 				end
-				eval( "#{ v.to_s } = '#{ res }'" )
+
+				if( some_file.end_with? '\\' )
+					some_file << '\\'
+				end
+				
+				eval( "#{ v.to_s } = '#{ some_file }'" )
 			end
 			
 		end
@@ -64,6 +101,16 @@ end
 
 def config_test
 
+	if( $ruby_vm == nil )
+		print_error( "Error, the Ruby interpreter has not been set, manually set \"$ruby_vm = 'c:\\path\\to\\ruby.exe'\" in your config.rb file." )
+		return false
+	end
+	
+	if( not ::File.exist?( $ruby_vm ) )
+		print_error( "Error, the Ruby interpreter '#{$ruby_vm}' does not exist." )
+		return false
+	end
+	
 	ruby_major = RUBY_VERSION.split( '.' )[0].to_i
 	ruby_minor = RUBY_VERSION.split( '.' )[1].to_i
 

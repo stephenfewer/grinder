@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -9,6 +9,7 @@ $:.unshift( '.' )
 require 'core/configuration'
 require 'core/logging'
 require 'digest/sha2'
+require 'lib/metasm/metasm'
 
 class Grinder
 	
@@ -81,7 +82,7 @@ class Grinder
 			end
 			
 			sysdir = 'system32'
-			if( ::Dir.exist?( "#{root}\\syswow64\\" ) )
+			if( ::Dir.exist?( "#{root}\\syswow64\\" ) and ::Metasm::WinAPI.host_cpu.size == 32 )
 				sysdir = 'syswow64'
 			end
 			
@@ -101,28 +102,35 @@ class Grinder
 				end
 			end
 			
-			::File.open( ".\\data\\#{dllname}", 'rb' ) do | dll_src |
-				::File.open( dllpath, 'rb' ) do | dll_dst |
-					
-					gl1 = dll_src.read( dll_src.stat.size )
-					
-					gl2 = dll_dst.read( dll_dst.stat.size )
+			dll_src_path = ".\\data\\#{ ::Metasm::WinAPI.host_cpu.size == 64 ? 'x64' : 'x86' }\\#{dllname}"
+			
+			begin
+				::File.open( dll_src_path, 'rb' ) do | dll_src |
+					::File.open( dllpath, 'rb' ) do | dll_dst |
+						
+						gl1 = dll_src.read( dll_src.stat.size )
+						
+						gl2 = dll_dst.read( dll_dst.stat.size )
 
-					if( ::Digest::SHA256.digest( gl1 ) != ::Digest::SHA256.digest( gl2 ) )
-						print_warning( "Warning, the grinder #{dlltitle} DLL '#{dllpath}' does not match the one from the \\grinder\\node\\data\\ directory. Please make sure you are using the latest one." )
+						if( ::Digest::SHA256.digest( gl1 ) != ::Digest::SHA256.digest( gl2 ) )
+							print_warning( "Warning, the grinder #{dlltitle} DLL '#{dllpath}' does not match the one from the '#{dll_src_path}' directory. Please make sure you are using the latest one." )
+						end
 					end
 				end
+			rescue Errno::ENOENT
+				print_error( "Error, unable to open the local file '#{dll_src_path}'." )
+				return false
 			end
 			
 			return true
 		end
 		
-		if( not check_dll.call( 'grinder_logger.dll', 'logger' ) )
+		if( not check_dll.call( "grinder_logger.dll", 'logger' ) )
 			return false
 		end
 
 		# sf: we are not using heaphook yet so this stays commented out for now.
-		#if( not check_dll.call( 'grinder_heaphook.dll', 'heap hook' ) )
+		#if( not check_dll.call( "grinder_heaphook#{ ::Metasm::WinAPI.host_cpu.size == 64 ? 'x64' : 'x86' }.dll"', 'heap hook' ) )
 		#	return false
 		#end
 		
@@ -148,7 +156,7 @@ class Grinder
 			return false
 		end
 		
-		print_status( "Bringing up Grinder node '#{$grinder_node}'..." )
+		print_status( "Bringing up Grinder node '#{$grinder_node}' with ruby #{RUBY_VERSION} (#{::Metasm::WinAPI.host_cpu.size}-bit)..." )
 		
 		continue_pid = ::Process.spawn( ".\\data\\continue.exe" )
 		print_status( "Started the Grinder continue process #{continue_pid}" )
@@ -162,13 +170,13 @@ class Grinder
 			kill_thread  = nil
 
 			if( not $server_pid )
-				$server_pid = ::Process.spawn( "ruby -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) } #{ ( not @verbose ? '--quiet' : '' ) }" )
+				$server_pid = ::Process.spawn( "#{$ruby_vm} -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) } #{ ( not @verbose ? '--quiet' : '' ) }" )
 				sleep( 2 )
 				print_status( "Started the Grinder server process #{$server_pid}" )
 				server_reset = 12
 			end
 			
-			$debugger_pid = ::Process.spawn( "ruby -I. #{@browser_class} --config=#{@config_file} --path=/grinder #{ ( not @verbose ? '--quiet' : '' ) }" )
+			$debugger_pid = ::Process.spawn( "#{$ruby_vm} -I. #{@browser_class} --config=#{@config_file} --path=/grinder #{ ( not @verbose ? '--quiet' : '' ) }" )
 			print_status( "Started the Grinder debugger process #{$debugger_pid}" )
 			
 			if( $debugger_pid and $debugger_restart_minutes )

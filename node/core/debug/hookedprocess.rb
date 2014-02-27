@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -16,20 +16,23 @@ module Grinder
 		
 			class HookedProcess < Grinder::Core::Debug::ProcessSymbols
 				
-				attr_accessor :all_loaded, :appverifier, :debugstrings, :commandline, :jscript_loaded
+				attr_accessor :all_loaded, :appverifier, :debugstrings, :commandline, :jscript_loaded, :modules
 				
 				attr_accessor :logger_injected, :logger_loaded, :logmessage, :logmessage2, :finishedtest, :startingtest
 				
 				attr_accessor :heaphook_injected, :heaphook_loaded, :heap_logmodule, :heap_flush, :heap_defaultalertcallback, :heap_records
 
-				def initialize( pid, handle )
-					super( pid, handle )
+				def initialize( pid, handle, addrsz )
+					super( pid, handle, addrsz )
+					
+					print_status( "Attached debugger to new #{ '%d-bit' % addrsz } process #{pid}." )
 					
 					@all_loaded                = false
 					@appverifier               = false
 					@debugstrings              = []
 					@commandline               = ''
 					@jscript_loaded            = false
+					@modules                   = {}
 					
 					@logger_injected           = false
 					@logger_loaded             = false
@@ -45,7 +48,7 @@ module Grinder
 					@heap_defaultalertcallback = nil
 					@heap_records              = nil
 				end
-				
+
 			end
 		
 		end

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+ * Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
  * Licensed under a 3 clause BSD license (Please see LICENSE.txt)
  * Source code located at https://github.com/stephenfewer/grinder
  * 
@@ -83,7 +83,7 @@ function LOGGER( name )
 	{
 		if( /Firefox[\/\s](\d+\.\d+)/.test(navigator.userAgent) )
 			return "FF";
-		else if( /MSIE (\d+\.\d+);/.test(navigator.userAgent) )
+		else if( /MSIE (\d+\.\d+);/.test(navigator.userAgent) || /Trident\//.test(navigator.userAgent) )
 			return "IE";
 		else if( /Chrome/.test(navigator.userAgent) )
 			return "CM";

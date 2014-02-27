@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -33,7 +33,7 @@ module Grinder
 					if( @@cached_major_version != -1 )
 						return true
 					end
-					pe = Metasm::PE.decode_file_header( FireFox.target_exe )
+					pe = ::Metasm::PE.decode_file_header( FireFox.target_exe )
 					version = pe.decode_version
 					if( version['FileVersion'] )
 						result = version['FileVersion'].scan( /(\d*).(\d*)/ )
@@ -47,12 +47,20 @@ module Grinder
 			end
 			
 			def loaders( pid, path, addr )
+			
+				# Sanity check in case a 64bit version comes out.
+				if( @os_process.addrsz == 64 )
+					print_error( "64-bit FireFox not supported." )
+					return
+				end
+						
 				if( path.include?( 'mozjs' ) )
 					@browser = 'FF'
 					if( not @attached[pid].jscript_loaded )
 						@attached[pid].jscript_loaded = loader_javascript( pid, addr )
 					end
 				end
+			
 				@attached[pid].all_loaded = @attached[pid].jscript_loaded
 			end
 
@@ -65,7 +73,7 @@ module Grinder
 				end
 				
 				if( not ff_version )
-					print_error( "Unable to determind FireFox version for hooking." )
+					print_error( "Unable to determine FireFox version for hooking." )
 					return false
 				end
 				
@@ -90,9 +98,9 @@ module Grinder
 				
 				print_status( "Resolved #{symbol} @ 0x#{'%08X' % js_strtod }" )
 
-				cpu        = Metasm::Ia32.new
+				cpu        = ::Metasm::Ia32.new
 				
-				code       = @mem[pid][parsefloat,512]
+				code       = @os_process.memory[parsefloat,512]
 
 				found      = false
 				
@@ -142,13 +150,13 @@ module Grinder
 				
 				print_status( "call to js_strtod @ 0x#{'%08X' % parsefloat }" )
 				
-				backup     = @mem[pid][parsefloat,patch_size]
+				backup     = @os_process.memory[parsefloat,patch_size]
 				
-				proxy_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, 1024, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
+				proxy_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, 1024, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
 				
 				fixup      = ''
 				
-				if( @@cached_major_version >= 23 ) # Tested against FF 23.0.1 an FF 26.0
+				if( @@cached_major_version >= 23 ) # Tested against FF 23.0.1, 26.0, 27.0.1
 					js_strtod_string_reg = 'esi' if not js_strtod_string_reg
 					
 					fixup = %Q{
@@ -177,7 +185,7 @@ module Grinder
 				end
 				
 				# we hook inside the function (not the prologue) after a call to resolve the string parameter...
-				proxy = Metasm::Shellcode.assemble( cpu, %Q{
+				proxy = ::Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
 					
@@ -226,11 +234,11 @@ module Grinder
 
 				proxy << backup
 				
-				proxy << jmp5( (parsefloat+backup.length), (proxy_addr+proxy.length) )
+				proxy << encode_jmp( (parsefloat+backup.length), (proxy_addr+proxy.length) )
 				
-				@mem[pid][proxy_addr, proxy.length] = proxy
+				@os_process.memory[proxy_addr, proxy.length] = proxy
 				
-				@mem[pid][parsefloat,patch_size]    = jmp5( proxy_addr, parsefloat ) + "\x90" * (patch_size - 5)
+				@os_process.memory[parsefloat,patch_size]    = encode_jmp( proxy_addr, parsefloat, patch_size )
 				
 				print_status( "Hooked JavaScript parseFloat() to grinder_logger.dll via proxy @ 0x#{'%08X' % proxy_addr }" )
 				

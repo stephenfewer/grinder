@@ -1,12 +1,12 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
 		
 $version_major = 0
 $version_minor = 5
-$version_dev   = true
+$version_dev   = false
 
 $print_owner   = ''
 $verbose       = true
@@ -51,12 +51,12 @@ def print_alert( message )
 end
 
 # Modified from the Metasploit REX library (\msf3\lib\rex\text.rb) (BSD Licensed)
-def to_hex_dump( str, offset=0, width=16 )
+def to_hex_dump( str, offset=0, width=16, fmt='%08X' )
 	buf, idx, cnt, snl, lst = '', 0, 0, false, 0
 	while (idx < str.length)
 		chunk = str[idx, width]
 		line  = chunk.unpack("H*")[0].scan(/../).join(" ").upcase
-		buf << "    0x#{'%08X' % (idx+offset)} - " << line
+		buf << "    0x#{fmt % (idx+offset)} - " << line
 		if (lst == 0)
 			lst = line.length
 			buf << " " * 4

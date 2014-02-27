@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -170,7 +170,7 @@ class Reduction
 
 	def spawn_browser
 		kill_browser
-		@debugger_pid = ::Process.spawn( "ruby -I. #{@browser_class} --reduction --quiet --path=/testcase_generate --config=#{@config_file}" )
+		@debugger_pid = ::Process.spawn( "#{$ruby_vm} -I. #{@browser_class} --reduction --quiet --path=/testcase_generate --config=#{@config_file}" )
 	end
 	
 	def kill_browser

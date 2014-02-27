@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -47,7 +47,7 @@ module Grinder
 				
 				# first, find the location of the 'parseFloat' string in the images memory
 				# WinDbg: s -a JavaScriptCore Lffffff parseFloat
-				parsefloat = @mem[pid][ imagebase, 0xFFFFFF ].index('parseFloat')
+				parsefloat = @os_process.memory[ imagebase, 0xFFFFFF ].index('parseFloat')
 				if( not parsefloat )
 					print_error( "Unable to resolved JavaScriptCore!parseFloat (1)" )
 					return false
@@ -56,7 +56,7 @@ module Grinder
 				
 				# next, find the first reference to the pointer to 'parseFloat'
 				# WinDbg:  s -d JavaScriptCore Lffffff XXXXXXXX 
-				parsefloat = @mem[pid][ imagebase, 0xFFFFFF ].index( [parsefloat].pack('V') )
+				parsefloat = @os_process.memory[ imagebase, 0xFFFFFF ].index( [parsefloat].pack('V') )
 				if( not parsefloat )
 					print_error( "Unable to resolved JavaScriptCore!parseFloat (2)" )
 					return false
@@ -64,7 +64,7 @@ module Grinder
 				parsefloat = imagebase + parsefloat
 				
 				# finally, the third dword from this address if the address of the parseFloat function!
-				parsefloat = @mem[pid][ parsefloat + 8, 4 ]
+				parsefloat = @os_process.memory[ parsefloat + 8, 4 ]
 				if( not parsefloat )
 					print_error( "Unable to resolved JavaScriptCore!parseFloat (3)" )
 					return false
@@ -78,9 +78,9 @@ module Grinder
 				
 				print_status( "Resolved JavaScriptCore!parseFloat @ 0x#{'%08X' % parsefloat }" )
 
-				cpu        = Metasm::Ia32.new
+				cpu        = ::Metasm::Ia32.new
 				
-				code       = @mem[pid][parsefloat,512]
+				code       = @os_process.memory[parsefloat,512]
 				
 				found      = false
 				
@@ -113,7 +113,7 @@ module Grinder
 				
 				call_count = 0 # hook after the 4th call, pretty lame but works fine for now.
 				
-				Metasm::Shellcode.disassemble( cpu, code ).decoded.each_value do | di |
+				::Metasm::Shellcode.disassemble( cpu, code ).decoded.each_value do | di |
 					if( di.opcode.name.downcase == 'call' )
 						call_count += 1
 						next
@@ -135,11 +135,11 @@ module Grinder
 					return false
 				end
 				
-				backup     = @mem[pid][parsefloat,patch_size]
+				backup     = @os_process.memory[parsefloat,patch_size]
 
-				proxy_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, 1024, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
+				proxy_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, 1024, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
 
-				proxy = Metasm::Shellcode.assemble( cpu, %Q{
+				proxy = ::Metasm::Shellcode.assemble( cpu, %Q{
 					pushfd
 					pushad
 					mov eax, [esp+0x0C+0x24] ; grab the pointer to the target object
@@ -192,11 +192,11 @@ module Grinder
 
 				proxy << backup
 				
-				proxy << jmp5( (parsefloat+backup.length), (proxy_addr+proxy.length) )
+				proxy << encode_jmp( (parsefloat+backup.length), (proxy_addr+proxy.length) )
 				
-				@mem[pid][proxy_addr, proxy.length] = proxy
+				@os_process.memory[proxy_addr, proxy.length] = proxy
 				
-				@mem[pid][parsefloat,patch_size]    = jmp5( proxy_addr, parsefloat ) + "\x90" * (patch_size - 5)
+				@os_process.memory[parsefloat,patch_size]    = encode_jmp( proxy_addr, parsefloat, patch_size )
 				
 				print_status( "Hooked JavaScript parseFloat() to grinder_logger.dll via proxy @ 0x#{'%08X' % proxy_addr }" )
 	

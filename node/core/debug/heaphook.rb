@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+# Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 # Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 # Source code located at https://github.com/stephenfewer/grinder
 #
@@ -13,25 +13,27 @@ module Grinder
 			module HeapHook
 			
 				# defines/structs from ./grinder/node/source/heap/heap.h
-				CONFIG_ZERO_ALLOCS             = 1
-				CONFIG_RECORD_DEFAULT_HEAP     = 2
-				CONFIG_SAFE_STACK_WALK         = 4
-				CONFIG_PASSTHROUGH_STACK_WALK  = 8
+				CONFIG_ZERO_ALLOCS             =  1
+				CONFIG_RECORD_DEFAULT_HEAP     =  2
+				CONFIG_SAFE_STACK_WALK         =  4
+				CONFIG_PASSTHROUGH_STACK_WALK  =  8
 				CONFIG_CHECK_WRITE_AFTER_FREE  = 16
 				CONFIG_DISABLE_CHUNK_RECORDING = 32
 				CONFIG_FLUSH_IF_RECORDS_FULL   = 64
 
-				ALERT_WRITE_AFTER_FREE         = 1
+				ALERT_WRITE_AFTER_FREE         =  1
 
-				CALLSTACK_DEPTH                = 5
+				CALLSTACK_DEPTH                =  5
 				
-				RECORDTYPE_ALLOC               = 1
-				RECORDTYPE_FREE                = 2
-				RECORDTYPE_REALLOC             = 4
+				RECORDTYPE_ALLOC               =  1
+				RECORDTYPE_FREE                =  2
+				RECORDTYPE_REALLOC             =  4
 				
 				INDEX_NOT_SET                  = -1
 				
-				Metasm::WinAPI.new_api_c( %Q|
+				HEAPHOOK_PATH                  = ".\\data\\#{ ::Metasm::WinAPI.host_cpu.size == 64 ? 'x64' : 'x86' }\\grinder_heaphook.dll"
+			
+				::Metasm::WinAPI.new_api_c( %Q|
 
 					typedef VOID CRITICAL_SECTION;
 					
@@ -71,7 +73,7 @@ module Grinder
 						HEAPRECORD Free;
 					} HEAPRECORDS;
 					
-					|, '.\\data\\grinder_heaphook.dll' )
+					|, HEAPHOOK_PATH )
 				
 				
 				# we use a seperate class for a chunk record so we dont have to pass metasm c structures around
@@ -206,7 +208,7 @@ module Grinder
 				end
 				
 				def heaphook_initialize( configflags=nil, defaultalertcallback=true )
-					@heaphook_dll         = 'grinder_heaphook.dll'
+					@heaphook_dll         = "grinder_heaphook.dll"
 					@chunk_busylist       = nil
 					@chunk_freelist       = nil
 					
@@ -235,14 +237,14 @@ module Grinder
 					return false
 				end
 				
-				def heaphook_parse_debugstring( debugstring, pid, mods )
+				def heaphook_parse_debugstring( debugstring, pid )
 					
-					result = debugstring.scan( /\[GRINDER-HEAP-ALERT\]     Call stack entry \d{1,}: (0x[0-9A-Fa-f]{8})/ )
+					result = debugstring.scan( /\[GRINDER-HEAP-ALERT\]     Call stack entry \d{1,}: (0x[0-9A-Fa-f]{8,})/ )
 					if( not result.empty? )
 						
 						ret_addr = result.first.first.to_i( 16 )
 						
-						ret_symbol = @attached[pid].address2symbol( ret_addr, mods )
+						ret_symbol = @attached[pid].address2symbol( ret_addr )
 						if( not ret_symbol.empty? )
 							debugstring = debugstring[ 0, debugstring.index( ': 0x' ) + 2 ] + ret_symbol
 						end
@@ -276,106 +278,106 @@ module Grinder
 					return nil
 				end
 				
-				def heaphook_loader( pid, imagebase )
-					print_status( "Heap Hook DLL loaded into process #{pid} @ 0x#{'%08X' % imagebase }")
+				def heaphook_loader( imagebase )
+					print_status( "Heap Hook DLL loaded into process #{@pid} @ 0x#{'%X' % imagebase }")
 					
-					if( not @attached[pid].heap_logmodule )
-						heap_logmodule = get_dll_export( pid, imagebase, 'HEAP_logModule' )
+					if( not @attached[@pid].heap_logmodule )
+						heap_logmodule = get_dll_export( imagebase, 'HEAP_logModule' )
 						if( heap_logmodule )
-							@attached[pid].heap_logmodule = heap_logmodule
+							@attached[@pid].heap_logmodule = heap_logmodule
 						else
 							print_error( "Failed to resolved grinder_heap!HEAP_logModule" )
 						end
 					end
 					
-					if( not @attached[pid].heap_flush )
-						heap_flush = get_dll_export( pid, imagebase, 'HEAP_flush' )
+					if( not @attached[@pid].heap_flush )
+						heap_flush = get_dll_export( imagebase, 'HEAP_flush' )
 						if( heap_flush )
-							@attached[pid].heap_flush = heap_flush
+							@attached[@pid].heap_flush = heap_flush
 						else
 							print_error( "Failed to resolved grinder_heap!HEAP_flush" )
 						end
 					end
 					
-					if( not @attached[pid].heap_defaultalertcallback )
-						heap_defaultalertcallback = get_dll_export( pid, imagebase, 'HEAP_defaultAlertCallback' )
+					if( not @attached[@pid].heap_defaultalertcallback )
+						heap_defaultalertcallback = get_dll_export( imagebase, 'HEAP_defaultAlertCallback' )
 						if( heap_defaultalertcallback )
-							@attached[pid].heap_defaultalertcallback = heap_defaultalertcallback
+							@attached[@pid].heap_defaultalertcallback = heap_defaultalertcallback
 						else
 							print_error( "Failed to resolved grinder_heap!HEAP_defaultAlertCallback" )
 						end
 					end
 					
-					if( not @attached[pid].heap_records )
-						heap_records = get_dll_export( pid, imagebase, 'HEAP_records' )
+					if( not @attached[@pid].heap_records )
+						heap_records = get_dll_export( imagebase, 'HEAP_records' )
 						if( heap_records )
-							@attached[pid].heap_records = heap_records
+							@attached[@pid].heap_records = heap_records
 						else
 							print_error( "Failed to resolved grinder_heap!HEAP_records" )
 						end
 					end
 					
-					heap_init = get_dll_export( pid, imagebase, 'HEAP_init' )
+					heap_init = get_dll_export( imagebase, 'HEAP_init' )
 					if( heap_init )
 					
 						alertcallback = 0
 						
 						if( @defaultalertcallback )
-							alertcallback = @attached[pid].heap_defaultalertcallback ? @attached[pid].heap_defaultalertcallback : 0;
+							alertcallback = @attached[@pid].heap_defaultalertcallback ? @attached[@pid].heap_defaultalertcallback : 0;
 						end
 						
 						struct = [ @configflags, alertcallback ].pack( 'VV' )
 						
-						struct_addr = Metasm::WinAPI.virtualallocex( @hprocess[pid], 0, struct.length, Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, Metasm::WinAPI::PAGE_READWRITE )
+						struct_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, struct.length, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_READWRITE )
 						
-						@mem[pid][struct_addr, struct.length] = struct
+						@os_process.memory[struct_addr, struct.length] = struct
 						
-						Metasm::WinAPI.createremotethread( @hprocess[pid], 0, 0, heap_init, struct_addr, 0, 0 )
+						::Metasm::WinAPI.createremotethread( @os_process.handle, 0, 0, heap_init, struct_addr, 0, 0 )
 						
-						print_status( "Heap hooking initialized for process #{pid}" )
+						print_status( "Heap hooking initialized for process #{@pid}" )
 					else
 						print_error( "Failed to resolved grinder_heap!HEAP_init" )
 					end
 					
-					if( heap_init and @attached[pid].heap_logmodule and @attached[pid].heap_flush and @attached[pid].heap_defaultalertcallback and @attached[pid].heap_records )
+					if( heap_init and @attached[@pid].heap_logmodule and @attached[@pid].heap_flush and @attached[@pid].heap_defaultalertcallback and @attached[@pid].heap_records )
 						return true
 					end
 				
 					return false
 				end
 				
-				def heaphook_parse_records( pid, mods )
+				def heaphook_parse_records( pid )
 
 					if( not use_heaphook?( pid ) or not @attached[pid].heap_records )
 						return false
 					end
 
-					heaprecord_size  = Metasm::WinAPI.sizeof_c_struct( "HEAPRECORD" )
+					heaprecord_size = ::Metasm::WinAPI.cp.sizeof( ::Metasm::WinAPI.cp.find_c_struct('HEAPRECORD') )
 					
 					# METASM cant seem to handle structures in structures so we have to do it this way instead :(
 					
-					busyrecords_data = @mem[pid][ @attached[pid].heap_records, heaprecord_size ]
+					busyrecords_data = @os_process.memory[ @attached[pid].heap_records, heaprecord_size ]
 					
-					freerecords_data = @mem[pid][ @attached[pid].heap_records + heaprecord_size, heaprecord_size ]
+					freerecords_data = @os_process.memory[ @attached[pid].heap_records + heaprecord_size, heaprecord_size ]
 					
 					if( not busyrecords_data or not freerecords_data )
 						return false
 					end
 
-					busyrecords_struct = Metasm::WinAPI.create_c_struct( "HEAPRECORD", busyrecords_data )
+					busyrecords_struct = ::Metasm::WinAPI.decode_c_struct( "HEAPRECORD", busyrecords_data )
 					
-					freerecords_struct = Metasm::WinAPI.create_c_struct( "HEAPRECORD", freerecords_data )
+					freerecords_struct = ::Metasm::WinAPI.decode_c_struct( "HEAPRECORD", freerecords_data )
 					
-					@chunk_busylist = parse_records( busyrecords_struct, pid, mods )
-
-					@chunk_freelist = parse_records( freerecords_struct, pid, mods )
+					@chunk_busylist = parse_records( busyrecords_struct, pid )
+					
+					@chunk_freelist = parse_records( freerecords_struct, pid )
 					
 					return true
 				end
 				
 			private
 			
-				def parse_records( heaprecord_struct, pid, mods )
+				def parse_records( heaprecord_struct, pid )
 					
 					chunk_list = ::Hash.new
 					chunkindex = heaprecord_struct[:dwchunkindex]
@@ -383,30 +385,26 @@ module Grinder
 
 					if( chunkbase > 0 and chunkindex > 0 )
 					
-						chunkrecord_size = Metasm::WinAPI.sizeof_c_struct( "CHUNKRECORD" )
-						
+						chunkrecord_size = ::Metasm::WinAPI.cp.sizeof( ::Metasm::WinAPI.cp.find_c_struct( "CHUNKRECORD" ) )
+
 						0.upto( chunkindex - 1 ) do | index |
 
-							chunkrecord_data = @mem[pid][ chunkbase + ( index * chunkrecord_size ), chunkrecord_size ]
+							chunkrecord_data = @os_process.memory[ chunkbase + ( index * chunkrecord_size ), chunkrecord_size ]
 								
 							break if not chunkrecord_data
 								
-							chunkrecord_struct = Metasm::WinAPI.create_c_struct( "CHUNKRECORD", chunkrecord_data )
+							chunkrecord_struct = ::Metasm::WinAPI.decode_c_struct( "CHUNKRECORD", chunkrecord_data )
 
 							chunkrecord = ChunkRecord.new( index, chunkrecord_struct )
 
 							0.upto( CALLSTACK_DEPTH - 1 ) do | index |
 								
-								ret_symbol = ''
+								ret_addr   = chunkrecord_struct[ "dwcallstack#{index}" ]
 									
-								ret_addr = chunkrecord_struct[ "dwcallstack#{index}" ]
-									
-								if( mods )
-									ret_symbol = @attached[pid].address2symbol( ret_addr, mods )
-								end
-									
+								ret_symbol = @attached[pid].address2symbol( ret_addr )
+
 								if( ret_symbol.empty? )
-									chunkrecord.add_caller( "0x%08X" % ret_addr )
+									chunkrecord.add_caller( "0x%X" % ret_addr )
 								else
 									chunkrecord.add_caller( "%s" % ret_symbol )
 								end

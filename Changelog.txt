@@ -1,3 +1,42 @@
+Version 0.5 - 27 Feb 2014
+=========================
+
+Server
+------
+	* Issue #5, session_is_registered() is depreciated, thanks sweetsyk00 (https://github.com/sweetsyk00).
+	* Added a 'Jump To' edit to jump to a specific page, thanks pyoor (https://github.com/pyoor).
+	* Modified crash display query to properly group based on verification status, thanks pyoor (https://github.com/pyoor).
+	* Make hash_quick a key for a perf boost, thanks Jason Kratzer.
+	* Added a delete crash button, thanks mutfuzz (https://github.com/mutfuzz).
+	* Set autofocus to user name input field, thanks mutfuzz (https://github.com/mutfuzz).
+	* Submit the login when user presses enter, thanks mutfuzz (https://github.com/mutfuzz).
+	
+Node
+----
+	* Added Ruby 2.0 compatibility.
+	* Added 64-bit process debugging and logging support.
+	* Synced METASM to the latest version.
+	* Issue #20, fixed a one byte overflow in logger.c, thanks guhe120 (https://github.com/guhe120).
+	* Updated the dbghelp and symsrv bins.
+	* Handle timeouts from a Grinder server.
+	* Update GC support for Chrome into logging.js.
+	* Update browser detection for 64-bit IE11 into logging.js.
+	* Update hooking stubs for latest 32-bit IE 11, FireFox 27.0.1 and Chrome 33.0.
+	* Added hooking stub for latest 64 bit IE 11.
+	* Added config.rb setting $log_debug_messages to enable/disable debug message logging. Defaults to false for FireFox unless explicitly set, default to true for all other browsers.
+	* Use dbghelp!StackWalk64 to walk a threads stack during crash logging. This is more reliable and works on 32 and 64 bit threads. User can use the old call stack technique via "$old_debugger_stackwalk = true" config.rb setting if required.
+	* Crash dumps now include a hex dump for each register that points to valid memory, not just the stack pointer.
+	
+Version 0.4 - 08 Jan 2013
+=========================
+
+Node
+----
+	* Debugger can skip potential orphan processes.
+	* Improve continue.exe to handle some FireFox dialogues.
+	* Fix hooking stubs for latest Safari and FireFox.
+
+
 Version 0.3 - 02 Oct 2012
 =========================
 
@@ -15,7 +54,9 @@ Node
 	* grinder_logger.dll is now thread safe and can handle log messages of an arbitrary size.
 	* Changed the server.rb 301 reditect to a 307 temporary redirect.
 	* Many small bug fixes!
-	
+
+
+
 Version 0.2 - 08 Feb 2012
 =========================
 

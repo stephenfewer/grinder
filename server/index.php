@@ -255,12 +255,12 @@
 						Update: function() {
 							updateCrash();
 						},
-						Cancel: function() {
-							$( this ).dialog( "close" );
-						},
 						Delete: function() {
 							deleteCrash();
-						}				
+						},
+						Cancel: function() {
+							$( this ).dialog( "close" );
+						}						
 					}
 					
 				});

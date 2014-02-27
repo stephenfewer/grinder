@@ -6,6 +6,7 @@ node/source/continue/ContinueScript.vcxproj.user
 node/source/continue/*.ncb
 node/source/continue/*.sdf
 node/source/continue/*.suo
+node/source/logger/x64/
 node/source/logger/Release/
 node/source/logger/Debug/
 node/source/logger/ipch/
@@ -14,6 +15,7 @@ node/source/logger/logger.vcxproj.user
 node/source/logger/*.ncb
 node/source/logger/*.sdf
 node/source/logger/*.suo
+node/source/heap/x64/
 node/source/heap/Release/
 node/source/heap/Debug/
 node/source/heap/ipch/
@@ -24,9 +26,18 @@ node/source/heap/*.sdf
 node/source/heap/*.suo
 node/source/heap/inject_heaphook/
 node/source/heap/heap_test/
-node/data/symsrv.yes
+node/data/x64/symsrv.yes
+node/data/x86/symsrv.yes
 server/config.php
 desktop.ini
 
+# let each user gen their own.
+node/lib/metasm/metasm/*.so
+
+# keep out for now...
+node/source/heap/
+node/data/x64/grinder_heaphook.dll
+node/data/x86/grinder_heaphook.dll
+server/nodes.php
 
 

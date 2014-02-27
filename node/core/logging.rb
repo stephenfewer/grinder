@@ -5,8 +5,8 @@
 #
 		
 $version_major = 0
-$version_minor = 5
-$version_dev   = false
+$version_minor = 6
+$version_dev   = true
 
 $print_owner   = ''
 $verbose       = true

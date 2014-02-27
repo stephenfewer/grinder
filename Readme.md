@@ -6,10 +6,9 @@ Grinder is a system to automate the fuzzing of web browsers and the management o
 System Requirements
 ===================
 
-A Grinder Node requires a 32bit Windows system and Ruby 1.9. Fuzzing will not work correctly on 64bit Windows or with Ruby 2.0.
-A Grinder Server requires a webserver with MySQL and PHP.
+A Grinder Node requires a 32/64 bit Windows system and Ruby 2.0 (Ruby 1.9 is also supported but you wont be able to fuzz 64bit targets).
 
-Please Note: Neither Mac OSX nor Linux are supported. Milestone 1 for Grinder aims to bring support for both 64bit Windows and Ruby 2.0.
+A Grinder Server requires a web server with MySQL and PHP.
 
 Features
 ========
@@ -44,13 +43,13 @@ Grinder Node features:
 
 * A node injects a logging DLL into the target browser process to help the fuzzers perform logging in order to recreate testcases at a later stage.
 
-* A node records usefull crash information such as call stack, stack dump, code dump and register info and also includes any available symbol information.
+* A node records useful crash information such as call stack, stack dump, code dump and register info and also includes any available symbol information.
  
 * A node can automatically encrypt all crash information with an RSA public key.
  
-* A node can automaticaly report new crashes to a remote Grinder Server.
+* A node can automatically report new crashes to a remote Grinder Server.
  
-* A node can run largely unatended for a long period of time.
+* A node can run largely unattended for a long period of time.
 
 Grinder Screenshots
 ===================
@@ -73,7 +72,7 @@ Installing a Grinder Server
 
 Installing a Grinder server requires a web server with PHP and MySQL.
 
-* Copy the contents of .\grinder\server\ over the the webserver.
+* Copy the contents of .\grinder\server\ over the the web server.
 
 * Create a MySQL database and associated user.
 
@@ -86,17 +85,19 @@ Installing a Grinder server requires a web server with PHP and MySQL.
 Installing a Grinder Node
 =========================
 
-Note: Grinder nodes are intended to be installed on 32bit Windows systems.
-
 For a detailed step by step guide to install a Grinder Node please refer to the following wiki page:
 
 https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node
 
 For a quick start, the steps for installing a node are as follows:
 
-* Install Ruby 1.9.3 (www.ruby-lang.org). (Please Note: Ruby 2.0 is not yet supported).
+* Install Ruby (www.ruby-lang.org). Ruby 2.0 can fuzz both 32bit and 64bit targets. Ruby 1.9 can only fuzz 32bit targets.
 
-* Copy '.\grinder\node\data\grinder_logger.dll' to 'c:\windows\system32\' (Or 'c:\windows\syswow64\' on an x64 system)
+* On a 32bit Windows system: Copy '.\grinder\node\data\x86\grinder_logger.dll' to 'c:\windows\system32\'
+
+* On a 64bit Windows system: Copy '.\grinder\node\data\x86\grinder_logger.dll' to 'c:\windows\syswow64\'
+
+* On a 64bit Windows system: Copy '.\grinder\node\data\x64\grinder_logger.dll' to 'c:\windows\system32\'
 
 * Create a folder for symbol files to be stored, e.g. 'c:\symbols\'
 
@@ -136,7 +137,7 @@ If the log file has been automatically encrypted, you can pass in a private key 
 
 Depending on how you write your fuzzers you may need to modify testcase.rb to suit or edit the testcase options ($testcase_opts) in your config file.
 
-If the testcase does not reproduce the crash it is usefull to create an 'Alert' within the Grinder Server to alert you by email whenever the same crash is encountered again. Using a different log file for the same crash may help reproduce it.
+If the testcase does not reproduce the crash it is useful to create an 'Alert' within the Grinder Server to alert you by email whenever the same crash is encountered again. Using a different log file for the same crash may help reproduce it.
 
 Source Code
 ===========
@@ -162,4 +163,4 @@ The following libraries are included with Grinder and are licensed separately as
 * jqPlot is licensed under the MIT license (Please see http://www.jqplot.com/info.php)
 * JQuery UI is licensed under the MIT license (Please see http://jquery.org/license)
 * jQuery Cookie plugin is licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-* dbghelp.dll (v6.12.2.633) and symsrv.dll (v6.12.2.633) are redistributable libraries from the Microsoft Debuggiong Tools for Windows. (Please see .\grinder\node\data\debugging_tools_license.txt)
+* dbghelp.dll (v6.2.9200.20512) and symsrv.dll (v6.2.9200.20512) are re-distributable libraries from the Microsoft Debugging Tools for Windows. (Please see .\grinder\node\data\debugging_tools_license.txt)

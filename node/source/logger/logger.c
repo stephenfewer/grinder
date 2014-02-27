@@ -209,7 +209,7 @@ VOID logMessage( wchar_t * cpMessageW )
 			dwTotal += dwWritten;
 		}
 
-		FlushFileBuffers( hLog );
+		//FlushFileBuffers( hLog );
 
 	} while( 0 );
 

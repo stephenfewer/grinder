@@ -1,5 +1,5 @@
 <?php
-	// Copyright (c) 2012, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
+	// Copyright (c) 2014, Stephen Fewer of Harmony Security (www.harmonysecurity.com)
 	// Licensed under a 3 clause BSD license (Please see LICENSE.txt)
 	// Source code located at https://github.com/stephenfewer/grinder
 	
@@ -332,14 +332,14 @@
 		<div id="error-message"></div>
 		
 		<div id="about-message">
-			<p>Version: 0.5-Dev</p>
+			<p>Version: 0.6-Dev</p>
 			<p>Author: Stephen Fewer of Harmony Security (<a href='http://www.harmonysecurity.com/' target='_blank'>www.harmonysecurity.com</a>)</p>
 			<p>Source Code: <a href='https://github.com/stephenfewer/grinder' target='_blank'>github.com/stephenfewer/grinder</a></p>
 		</div>
 		
 		<center>
 			<div id='footer'>
-				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.5-Dev</a>
+				<a onclick='$( "#about-message" ).dialog( "open" );' href='#'>Grinder v0.6-Dev</a>
 			</div>
 		</center>
 		

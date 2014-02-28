@@ -1,3 +1,8 @@
+Version 0.6-dev
+=========================
+
+
+
 Version 0.5 - 27 Feb 2014
 =========================
 
@@ -49,10 +54,10 @@ Node
 ----
 	* Add in initial work for automated testcase reduction via .\node\reduction.rb
 	* Added IE10 support (As seen in Windows 8 Consumer Preview) (grinder\node\browser\internetexplorer.rb).
-	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Usefull for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
+	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Useful for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
 	* Added a --help and --version parameter to grinder.rb and testcase.rb.
 	* grinder_logger.dll is now thread safe and can handle log messages of an arbitrary size.
-	* Changed the server.rb 301 reditect to a 307 temporary redirect.
+	* Changed the server.rb 301 redirect to a 307 temporary redirect.
 	* Many small bug fixes!
 
 
@@ -76,7 +81,7 @@ Node
 	* Allow browser specific fuzzers via sub directories (IE/CM/FF/OP/SF) in the \grinder\node\fuzzers\ folder.
 	* Refactored the javascript portion of the logging out to grinder\node\data\logging.js so it can be updated without effecting existing fuzzers. Updated grinder\node\core\server.rb and grinder\node\fuzzers\SimpleExample.html to use this.
 	* Check for grinder_logger.dll in system32/syswow64 and copy if not there, then fail the system test if the copy fails.
-	* Bugfix for saving a log file when a concurrancy issue prevents the temporary log file from being accessed or deleated.
+	* Bugfix for saving a log file when a concurrency issue prevents the temporary log file from being accessed or deleted.
 	* Removed the $webstats_update_minutes option from config.rb as it can lead to an inconsistency with the Grinder Server.
 
 

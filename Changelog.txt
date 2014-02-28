@@ -1,6 +1,9 @@
 Version 0.6-dev
 =========================
 
+Server
+------
+	* System tab now reports the system wide average testcases per minute.
 
 
 Version 0.5 - 27 Feb 2014

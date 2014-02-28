@@ -60,7 +60,23 @@
 			{
 				$row = mysql_fetch_array( $result );
 				if( $row )
-					echo "<p class='message-text'>A total of " . htmlentities( $row['total'], ENT_QUOTES ) . " crashes have been generated, of which " . htmlentities( $unique, ENT_QUOTES ) . " appear unique.</p>";
+				{
+					echo "<p class='message-text'>A total of " . htmlentities( $row['total'], ENT_QUOTES ) . " crashes have been generated, of which " . htmlentities( $unique, ENT_QUOTES ) . " appear unique.";
+					
+					$sql = "SELECT SUM(testcases_per_minute) AS system_tcpm FROM nodes;";
+					$result2 = mysql_query( $sql );
+					if( $result2 )
+					{
+						$row = mysql_fetch_array( $result2 );
+						if( $row )
+						{
+							echo " The system is currently averaging " . htmlentities( intval( $row['system_tcpm'] ), ENT_QUOTES ) . " testcases per minute.";
+						}
+						mysql_free_result( $result2 );
+					}
+					
+					echo "</p>";
+				}
 				
 				mysql_free_result( $result );
 			}

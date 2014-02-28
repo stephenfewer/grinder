@@ -91,7 +91,7 @@ https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node
 
 For a quick start, the steps for installing a node are as follows:
 
-* Install Ruby (www.ruby-lang.org). Ruby 2.0 can fuzz both 32bit and 64bit targets. Ruby 1.9 can only fuzz 32bit targets.
+* Install Ruby (www.ruby-lang.org). Ruby 2.0 x64 can fuzz both 32bit and 64bit targets. Ruby 2.0 x86 and Ruby 1.9 x86 can only fuzz 32bit targets.
 
 * On a 32bit Windows system: Copy '.\grinder\node\data\x86\grinder_logger.dll' to 'c:\windows\system32\'
 

@@ -262,7 +262,7 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
 		<title>Grinder - Install</title>
 		<meta name="robots" content="noindex"/>
-		<meta name="copyright" content="Copyright (c) 2011, Harmony Security." />
+		<meta name="copyright" content="Copyright (c) 2014, Harmony Security." />
 		<link rel="shortcut icon" type="image/x-icon" href="favicon.ico"/>
 		<link type="text/css" href="scripts/jquery/css/ui-lightness/jquery-ui-1.8.16.custom.css" rel="stylesheet" />	
 		<link type="text/css" href="style.css" rel="stylesheet" />	

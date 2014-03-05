@@ -83,7 +83,9 @@ function LOGGER( name )
 	{
 		if( /Firefox[\/\s](\d+\.\d+)/.test(navigator.userAgent) )
 			return "FF";
-		else if( /MSIE (\d+\.\d+);/.test(navigator.userAgent) || /Trident\//.test(navigator.userAgent) )
+		else if( /MSIE (\d+\.\d+);/.test(navigator.userAgent) )
+			return "IE";
+		else if( /Trident\//.test(navigator.userAgent) )
 			return "IE";
 		else if( /Chrome/.test(navigator.userAgent) )
 			return "CM";

@@ -31,7 +31,8 @@ module Grinder
 				
 				INDEX_NOT_SET                  = -1
 				
-				HEAPHOOK_PATH                  = ".\\data\\#{ ::Metasm::WinAPI.host_cpu.size == 64 ? 'x64' : 'x86' }\\grinder_heaphook.dll"
+				HEAPHOOK_PATH                  = "c:\\windows\\syswow64\\grinder_heaphook.dll"
+				#HEAPHOOK_PATH                  = ".\\data\\#{ ::Metasm::WinAPI.host_cpu.size == 64 ? 'x64' : 'x86' }\\grinder_heaphook.dll"
 			
 				::Metasm::WinAPI.new_api_c( %Q|
 
@@ -42,9 +43,12 @@ module Grinder
 						BYTE bType;
 						BYTE bUnused[3];
 						DWORD dwNextIndex;        // if a realloc this is -1 or and index to a subsequent realloc. if a free this is -1. if an alloc this is either -1 or and index to a subsequent realloc.
-						LPVOID lpPrevChunkAddres; // only used for reallocs to stor the orig address before reallocation (easier than storing a backlink index)
-						HANDLE hHeapHandle;
-						LPVOID lpChunkAddress;
+						//LPVOID lpPrevChunkAddres; // only used for reallocs to stor the orig address before reallocation (easier than storing a backlink index)
+						DWORD lpPrevChunkAddres;
+						//HANDLE hHeapHandle;
+						DWORD hHeapHandle;
+						//LPVOID lpChunkAddress;
+						DWORD lpChunkAddress;
 						DWORD dwChunkSize;
 						DWORD dwFlags;
 						DWORD dwFuzzerIdx;
@@ -60,11 +64,15 @@ module Grinder
 					
 					typedef struct _HEAPRECORD
 					{
-						CHUNKRECORD * pChunkBase;
-						CHUNKRECORD * pChunkLimit;
-						CHUNKRECORD * pChunkCurrent;
+						//CHUNKRECORD * pChunkBase;
+						DWORD pChunkBase;
+						//CHUNKRECORD * pChunkLimit;
+						DWORD pChunkLimit;
+						//CHUNKRECORD * pChunkCurrent;
+						DWORD pChunkCurrent;
 						DWORD dwChunkIndex;
-						CRITICAL_SECTION * pLock;
+						//CRITICAL_SECTION * pLock;
+						DWORD pLock;
 					} HEAPRECORD;
 
 					typedef struct _HEAPRECORDS
@@ -72,6 +80,14 @@ module Grinder
 						HEAPRECORD Busy;
 						HEAPRECORD Free;
 					} HEAPRECORDS;
+					
+					typedef struct _HEAPINIT
+					{
+						DWORD dwConfigFlags;
+						//LPVOID pAlertCallback;
+						DWORD pAlertCallback;
+						BOOL bUseLogger;
+					} HEAPINIT;
 					
 					|, HEAPHOOK_PATH )
 				
@@ -218,8 +234,9 @@ module Grinder
 					# CONFIG_PASSTHROUGH_STACK_WALK  - Dont check the calling modules to see if a caller is from a module we are interested in (accept all modules).
 					# CONFIG_CHECK_WRITE_AFTER_FREE  - When flushing the chunk records check if any freed chunk was written to after it was freed.
 					# CONFIG_DISABLE_CHUNK_RECORDING - Dont record the chunk allocations/frees.
-
-					@configflags          = configflags ? configflags : CONFIG_ZERO_ALLOCS | CONFIG_RECORD_DEFAULT_HEAP
+					# CONFIG_FLUSH_IF_RECORDS_FULL   - If the recorded lists become full, flush them and start again.
+					
+					@configflags          = configflags ? configflags : CONFIG_ZERO_ALLOCS | CONFIG_RECORD_DEFAULT_HEAP | CONFIG_CHECK_WRITE_AFTER_FREE
 					@defaultalertcallback = defaultalertcallback
 					
 					@hhmodules            = {}
@@ -237,14 +254,14 @@ module Grinder
 					return false
 				end
 				
-				def heaphook_parse_debugstring( debugstring, pid )
+				def heaphook_parse_debugstring( debugstring )
 					
 					result = debugstring.scan( /\[GRINDER-HEAP-ALERT\]     Call stack entry \d{1,}: (0x[0-9A-Fa-f]{8,})/ )
 					if( not result.empty? )
 						
 						ret_addr = result.first.first.to_i( 16 )
 						
-						ret_symbol = @attached[pid].address2symbol( ret_addr )
+						ret_symbol = @attached[@pid].address2symbol( ret_addr )
 						if( not ret_symbol.empty? )
 							debugstring = debugstring[ 0, debugstring.index( ': 0x' ) + 2 ] + ret_symbol
 						end
@@ -326,11 +343,20 @@ module Grinder
 							alertcallback = @attached[@pid].heap_defaultalertcallback ? @attached[@pid].heap_defaultalertcallback : 0;
 						end
 						
-						struct = [ @configflags, alertcallback ].pack( 'VV' )
+						#struct = ::Metasm::WinAPI.alloc_c_struct( 
+						#	'HEAPINIT', 
+						#	:dwconfigflags  => @configflags, 
+						#	:palertcallback => alertcallback,
+						#	:buselogger     => 1
+						#)
+						#struct_size = struct.sizeof
 						
-						struct_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, struct.length, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_READWRITE )
+						struct = [ @configflags, alertcallback, 1 ].pack( 'VVV' )
+						struct_size = struct.length
 						
-						@os_process.memory[struct_addr, struct.length] = struct
+						struct_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, struct_size, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_READWRITE )
+						
+						@os_process.memory[struct_addr, struct_size] = struct
 						
 						::Metasm::WinAPI.createremotethread( @os_process.handle, 0, 0, heap_init, struct_addr, 0, 0 )
 						
@@ -346,9 +372,9 @@ module Grinder
 					return false
 				end
 				
-				def heaphook_parse_records( pid )
+				def heaphook_parse_records
 
-					if( not use_heaphook?( pid ) or not @attached[pid].heap_records )
+					if( not use_heaphook?( @pid ) or not @attached[@pid].heap_records )
 						return false
 					end
 
@@ -356,9 +382,9 @@ module Grinder
 					
 					# METASM cant seem to handle structures in structures so we have to do it this way instead :(
 					
-					busyrecords_data = @os_process.memory[ @attached[pid].heap_records, heaprecord_size ]
+					busyrecords_data = @os_process.memory[ @attached[@pid].heap_records, heaprecord_size ]
 					
-					freerecords_data = @os_process.memory[ @attached[pid].heap_records + heaprecord_size, heaprecord_size ]
+					freerecords_data = @os_process.memory[ @attached[@pid].heap_records + heaprecord_size, heaprecord_size ]
 					
 					if( not busyrecords_data or not freerecords_data )
 						return false
@@ -367,23 +393,23 @@ module Grinder
 					busyrecords_struct = ::Metasm::WinAPI.decode_c_struct( "HEAPRECORD", busyrecords_data )
 					
 					freerecords_struct = ::Metasm::WinAPI.decode_c_struct( "HEAPRECORD", freerecords_data )
+
+					@chunk_busylist = parse_records( busyrecords_struct )
 					
-					@chunk_busylist = parse_records( busyrecords_struct, pid )
-					
-					@chunk_freelist = parse_records( freerecords_struct, pid )
+					@chunk_freelist = parse_records( freerecords_struct )
 					
 					return true
 				end
 				
 			private
 			
-				def parse_records( heaprecord_struct, pid )
+				def parse_records( heaprecord_struct )
 					
 					chunk_list = ::Hash.new
-					chunkindex = heaprecord_struct[:dwchunkindex]
-					chunkbase  = heaprecord_struct[:pchunkbase]
+					chunkindex = heaprecord_struct["dwchunkindex"]
+					chunkbase  = heaprecord_struct["pchunkbase"]
 
-					if( chunkbase > 0 and chunkindex > 0 )
+					if( chunkbase and chunkbase > 0 and chunkindex and chunkindex > 0 )
 					
 						chunkrecord_size = ::Metasm::WinAPI.cp.sizeof( ::Metasm::WinAPI.cp.find_c_struct( "CHUNKRECORD" ) )
 
@@ -401,7 +427,7 @@ module Grinder
 								
 								ret_addr   = chunkrecord_struct[ "dwcallstack#{index}" ]
 									
-								ret_symbol = @attached[pid].address2symbol( ret_addr )
+								ret_symbol = @attached[@pid].address2symbol( ret_addr )
 
 								if( ret_symbol.empty? )
 									chunkrecord.add_caller( "0x%X" % ret_addr )

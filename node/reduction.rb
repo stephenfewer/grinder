@@ -120,7 +120,7 @@ class Reduction
 			return false
 		end
 		
-		# this is kinda hacky but it should prevent people from trying to run the node incorectly.
+		# this is kinda hacky but it should prevent people from trying to run the node incorrectly.
 		if( not ::File.exist?( ".\\reduction.rb" ) )
 			print_error( "Error, you are not running this node from the \\grinder\\node\\ directory. You need to change the working directory (cd path\\to\\grinder\\node\\) and try again." )
 			return false
@@ -151,7 +151,7 @@ class Reduction
 		end
 		
 		if( not @hash or @hash.length != 17 )
-			print_error( "The origional crash hash has not been specified. Use the --hash=XXXXXXXX.XXXXXXXX param." )
+			print_error( "The original crash hash has not been specified. Use the --hash=XXXXXXXX.XXXXXXXX param." )
 			return false
 		end
 		
@@ -178,10 +178,10 @@ class Reduction
 			begin
 				::Process.kill( "KILL", @debugger_pid )
 				::Process.wait( @debugger_pid )
-				# we might need to wait for continue.exe to close any crash dialogs...
+				# we might need to wait for continue.exe to close any crash dialogues...
 				loop do
 					found = false
-					Metasm::WinOS.list_processes.each do | proc |
+					::Metasm::WinOS.list_processes.each do | proc |
 						mods = proc.modules
 						if( mods )
 							if( mods.first and mods.first.path.include?( @browser_exe ) )
@@ -192,7 +192,7 @@ class Reduction
 					end
 					break if not found
 				end
-			rescue ::Errno::ESRCH
+			rescue ::Errno::ESRCH, Errno::ECHILD
 			end
 			@debugger_pid = nil
 		end
@@ -403,20 +403,24 @@ class Reduction
 			when 4
 				print_status( "Performing pass 4: Final verification." )
 		end
-
-		# spin up a server to serve out the html testcase
-		@reduction_server = Grinder::Core::Server.new( $server_address, $server_port, @browser_type, nil, self )
 		
-		@reduction_server.start
+		if( @current_pass == 2 and @elems.keeping.length == 1 )
+			success = true
+		else
+			# spin up a server to serve out the html testcase
+			@reduction_server = Grinder::Core::Server.new( $server_address, $server_port, @browser_type, nil, self )
+			
+			@reduction_server.start
 
-		# start a broswer instance to visit /testcase_generate
-		spawn_browser
+			# start a browser instance to visit /testcase_generate
+			spawn_browser
 
-		@reduction_server.wait
-		
-		kill_browser
-		
-		success = true
+			@reduction_server.wait
+			
+			kill_browser
+			
+			success = true
+		end
 		
 		# print pass results (like above)
 		case @current_pass
@@ -462,8 +466,8 @@ class Reduction
 		
 		@browser_exe = exe[ exe.rindex('\\') + 1, exe.length - exe.rindex('\\') ]
 
-		# these fixups try to ensure any testcase line which tries to reload the page (typically 
-		# the end of the testcase, in order to get a new testcase during fuzzing) will infact
+		# these fix-ups try to ensure any testcase line which tries to reload the page (typically 
+		# the end of the testcase, in order to get a new testcase during fuzzing) will in fact
 		# signal the end of the current testcase to the reduction server.
 		fixups = {
 			"+ window.location.host + '/grinder';" => "+ window.location.host + '/testcase_processed';",
@@ -479,16 +483,16 @@ class Reduction
 		# force lines to be wrapped in try/catch to avoid any js exceptions killing a testcase (which would interph33r with automation)
 		@opts['try_catch'] = true
 		
-		# in case a 'testcase_fixups' hash isnt set, we set one
+		# in case a 'testcase_fixups' hash isn't set, we set one
 		@opts['testcase_fixups'] = ::Hash.new if not @opts.has_key?( 'testcase_fixups' )
 		
 		# and the same for the 'testcase_append_function' string 
 		@opts['testcase_append_function'] = '' if not @opts.has_key?( 'testcase_append_function' )
 		
-		# now merge in our window.location fixups over the users ones
+		# now merge in our window.location fix-ups over the users ones
 		@opts['testcase_fixups'] = @opts['testcase_fixups'].merge( fixups )
 		
-		# merge in a final line for the testcase() function to visit the reduction servers /testcase_processed. This might end up being a duplicate final line but we must ensure it esists either way.
+		# merge in a final line for the testcase() function to visit the reduction servers /testcase_processed. This might end up being a duplicate final line but we must ensure it exists either way.
 		@opts['testcase_append_function'] << ";\nwindow.location.href = window.location.protocol + '//' + window.location.host + '/testcase_processed';\n"
 		
 		# parse the log file so we can generate testcases from it
@@ -514,11 +518,11 @@ class Reduction
 			success = ( not @crash_hashes.empty? )
 			
 			if( success and @crash_hashes.first[0] == @hash )
-				print_status( "Success, verified the testcase (Automatically generates the origional crash '#{@crash_hashes.first[0]}')." )
+				print_status( "Success, verified the testcase (Automatically generates the original crash '#{@crash_hashes.first[0]}')." )
 			elsif( success and @crash_hashes.first[0] != @hash )
 				print_status( "Success, verified the testcase (Automatically generates a different crash '#{@crash_hashes.first[0]}')." )
 			else
-				print_error( "Error, failed to verify the testcase (Couldn't trigger the origional crash)." )
+				print_error( "Error, failed to verify the testcase (Couldn't trigger the original crash)." )
 			end
 			
 		elsif( @reduce )
@@ -575,10 +579,10 @@ if( $0 == __FILE__ )
 		print_simple( "  --browser=BROWSER           The browser to perform the reduction on (e.g. IE, CM, FF, SF)." )
 		print_simple( "  --log=FILE                  The path to a log file (either encrypted or unencrypted)." )
 		print_simple( "  --save=FILE                 The path to a save toe reduced/verified testcase to." )
-		print_simple( "  --hash=XXXXXXXX.XXXXXXXX    The origional crash hash you wish to verify/reduce" )
+		print_simple( "  --hash=XXXXXXXX.XXXXXXXX    The original crash hash you wish to verify/reduce" )
 		print_simple( "  --quiet                     Don't print any status/error messages to stdout" )
 		print_simple( "  --key=PRIVATEKEY.PEM        If the input log file is encrypted, use a private key to decrypt" )
-		print_simple( "  --keypass=PASSPHRASE        Sepcify a pass phrase if the private key requires one" )
+		print_simple( "  --keypass=PASSPHRASE        Specify a pass phrase if the private key requires one" )
 		::Kernel.exit( true )
 	elsif( ARGV.include?( '--version' ) or ARGV.include?( '-v' ) or ARGV.include?( '/v' ) or ARGV.include?( '/version' ) )
 		print_simple( "Version #{$version_major}.#{$version_minor}#{$version_dev ? '-Dev' : '' }" )

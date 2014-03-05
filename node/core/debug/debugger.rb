@@ -72,6 +72,7 @@ module Grinder
 						@callback_debugstring = lambda do | info | 
 							debugstring = info ? info[:string] : nil
 							if( debugstring and debugstring.force_encoding("UTF-8").ascii_only? and not debugstring.empty? )
+								debugstring.chomp!
 								@attached[@pid].debugstrings << debugstring
 								print_status( "Debug message from process #{@pid}: #{debugstring}" )
 							end
@@ -269,7 +270,7 @@ module Grinder
 						if( mod_path.include?( @heaphook_dll ) )
 							
 							if( instrument_heap and not @attached[@pid].heaphook_loaded )
-								@attached[@pid].heaphook_loaded = heaphook_loader( @pid, mod_base )
+								@attached[@pid].heaphook_loaded = heaphook_loader( mod_base )
 							end
 							
 						elsif( mod_path.include?( 'vrfcore.dll' ) and not @attached[@pid].appverifier )
@@ -427,7 +428,7 @@ module Grinder
 					# Force all modules in the process to get their symbols for all upcoming lookups...
 					@attached[@pid].refresh_symbols
 
-					heaphook_parse_records( @pid )
+					heaphook_parse_records
 					
 					resolve_sym = lambda do | address |
 						sym = @attached[@pid].address2symbol( address )
@@ -604,7 +605,7 @@ module Grinder
 
 							debugstring = debugstring.chomp
 							
-							debugstring = heaphook_parse_debugstring( debugstring, @pid )
+							debugstring = heaphook_parse_debugstring( debugstring )
 							
 							log_data << "    * #{debugstring}\n"
 						end
@@ -766,6 +767,7 @@ module Grinder
 						status     = debugger.monitor
 					rescue => e
 						print_error( "Fatal error '#{e.message}', quitting." )
+						print_simple( e.backtrace )
 						status = -1
 					end
 					

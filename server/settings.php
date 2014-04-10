@@ -184,7 +184,7 @@
 					if( !rx.exec( user_password1 ) )
 						return error_alert( 'Please use only ASCII and numeric charachters for the user password.', 'Error!' );
 						
-					$.post( 'system.php', { action:'add_user', name:getUserName, email:getUserEmail, password:getUserPassword1, type:getUserType }, function( data ) {
+					$.post( 'settings.php', { action:'add_user', name:getUserName, email:getUserEmail, password:getUserPassword1, type:getUserType }, function( data ) {
 						if( data != 'success' )
 							return error_alert( 'Failed to create the account.', 'Error!' );
 						error_alert( 'The new user account has been created', 'Success!' );
@@ -201,7 +201,7 @@
 					
 				if( confirm( 'Are you sure you want to delete this user?' ) )
 				{
-					$.post( 'system.php', { action:'delete_user', id:getDeleteUserId }, function( data ) {
+					$.post( 'settings.php', { action:'delete_user', id:getDeleteUserId }, function( data ) {
 						if( data != 'success' )
 							return error_alert( 'Failed to delete the account.', 'Error!' );
 						error_alert( 'The user account has been deleated', 'Success!' );

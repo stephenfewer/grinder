@@ -40,4 +40,6 @@ node/data/x64/grinder_heaphook.dll
 node/data/x86/grinder_heaphook.dll
 server/nodes.php
 
-
+# JetBRAINS project directories
+server/.idea
+node/.idea

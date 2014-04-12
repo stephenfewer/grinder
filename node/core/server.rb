@@ -65,7 +65,7 @@ module Grinder
 					if( minutes_since_last_update > webstats_update_minutes )
 						begin
 							if( $webstats_baseurl and $webstats_key )
-								web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password )
+								web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
 								
 								if( @@reductor )
 									web.update_job_status( @@testcases_since_update / webstats_update_minutes, ::Grinder::Core::WebStats::JOB_REDUCTION )

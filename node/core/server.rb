@@ -202,7 +202,7 @@ module Grinder
 				GrinderServlet.reduction( reduction )
 				
 				if( $webstats_baseurl and $webstats_key )
-					web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password )
+					web = ::Grinder::Core::WebStats.new( $grinder_node, $webstats_baseurl, $webstats_key, $webstats_username, $webstats_password, $webstats_https )
 					if( reduction )
 						web.update_job_status( 0, ::Grinder::Core::WebStats::JOB_REDUCTION )
 					else

@@ -138,7 +138,7 @@ def config_test
 		return false
 	end
 		
-	if( $debugger_restart_minutes < 5 )
+	if( $debugger_restart_minutes and $debugger_restart_minutes < 5 )
 		print_warning( "Warning, you have set the debugger to restart every #{$debugger_restart_minutes} minutes, The Grinder Server will see this node as inactive unless you use a value of more than 5 minutes." )
 	end
 		

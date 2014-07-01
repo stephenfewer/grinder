@@ -125,6 +125,8 @@ module Grinder
 					response = http.request( request )
 				rescue Errno::ETIMEDOUT
 					print_error( "Timeout requesting '#{uri}'." )
+				rescue Errno::ECONNREFUSED
+					print_error( "Connection Refused for '#{uri}'." )
 				end
 				
 				return response

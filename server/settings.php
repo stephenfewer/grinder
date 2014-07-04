@@ -12,6 +12,8 @@
 	
 	require_once 'user.php';
 	
+	require_once 'database.php';
+	
 	if( !user_isloggedin() )
 		exit;
 		
@@ -38,10 +40,64 @@
 		}
 	}
 	
+	// http://stackoverflow.com/a/2510540/14260
+	function formatBytes($size, $precision = 2)
+	{
+		$base = log($size) / log(1024);
+		$suffixes = array('', 'KB', 'MB', 'GB', 'TB');   
+
+		return round(pow(1024, $base - floor($base)), $precision) . ' ' . $suffixes[floor($base)];
+	}
+	
+	function show_database()
+	{
+		$db_size = 0;
+		
+		echo "<h3>Status:</h3>";
+		
+		$result = mysql_query( "SHOW TABLE STATUS" );
+		if( $result )
+		{
+			while( $row = mysql_fetch_array( $result ) )
+			{  
+				$db_size += $row['Index_length']; 
+				$db_size += $row['Data_length'];
+			}
+			
+			echo "<p>The Grinder Server database '" . htmlentities( database_get_name(), ENT_QUOTES ) . "' is currently " . htmlentities( formatBytes( $db_size ), ENT_QUOTES ) . " in size.</p>";
+			
+			mysql_free_result( $result );
+		}
+		
+		/*
+		echo "<h3>Purge Database:</h3>";
+		echo "<p>Purge all crashes and nodes from the database.</p>";
+		echo "<div id='purge_db_button'>Purge</div>";
+		*/
+	}
+	
 	function show_users()
 	{
-		echo "<h3>Create Account:</h3>";
-		echo "<p>New Username: <input id='user_name' value=''></input></p>";
+		echo "<h3>Existing Accounts:</h3>";
+		
+		$result = mysql_query( "SELECT id, name, email, type FROM users;" );
+		if( $result )
+		{
+			echo "<ul>";
+			while( $row = mysql_fetch_array( $result ) )
+			{
+				$user_type = 'a User';
+				if( $row['type'] == 0 )
+					$user_type = 'an Administrator';
+					
+				echo "<li><span class='message-text'>Account '" . htmlentities( $row['name'], ENT_QUOTES ) . "' (" . htmlentities( $row['email'], ENT_QUOTES ) . ") is " . htmlentities( $user_type, ENT_QUOTES ) . ".</span></li><br/>";
+			}
+			echo "</ul>";
+			mysql_free_result( $result );
+		}
+		
+		echo "<h3>Create New Account:</h3>";
+		echo "<p><span>New Username: <input id='user_name' value=''></input></p>";
 		echo "<p>New Password: <input id='user_password1' type='password' value=''></input></p>";
 		echo "<p>Retype the Password: <input id='user_password2' type='password' value=''></input></p>";
 		echo "<p>Users E-Mail Address: <input id='user_email' value=''></input></p>";
@@ -54,7 +110,7 @@
 		{		
 			if( mysql_num_rows( $result ) > 0 )
 			{
-				echo "<h3>Delete Account:</h3><select id='delete_user'>";
+				echo "<h3>Delete Existing Account:</h3><select id='delete_user'>";
 				
 				while( $row = mysql_fetch_array( $result ) )
 				{
@@ -96,6 +152,9 @@
 
 					$success = user_delete( $id );
 				}
+				break;
+			case 'purge_db':
+				$success = database_purge();
 				break;
 			default:
 				break;
@@ -141,6 +200,18 @@
 					
 				return null;
 			}
+			
+			$( "#purge_db_button" ).button().click( function() {
+				if( confirm( 'Are you sure you want to purge the database?' ) )
+				{
+					$.post( 'settings.php', { action:'purge_db' }, function( data ) {
+						if( data != 'success' )
+							return error_alert( 'Failed to purge the database.', 'Error!' );
+						error_alert( 'The user database has been purged', 'Success!' );
+						refreshTab( 0 );
+					});
+				}
+			} );
 			
 			$( "#create_button" ).button().click( function() {
 			
@@ -247,6 +318,11 @@
 			<h3><a href="#">Users</a></h3>
 			<div>
 				<?php show_users(); ?>
+			</div>
+			
+			<h3><a href="#">Database</a></h3>
+			<div>
+				<?php show_database(); ?>
 			</div>
 			
 		</div>

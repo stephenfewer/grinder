@@ -3,6 +3,8 @@ Version 0.6-dev
 
 Server
 ------
+	* Settings tab now list all user account in the system.
+	* Settings tab now reports the Grinder Servers database size.
 	* System tab now reports the system wide average testcases per minute.
 	* Add/Delete user accounts is back working, thanks Juan Vazquez (https://github.com/jvazquez-r7). 
 

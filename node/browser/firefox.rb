@@ -154,11 +154,14 @@ module Grinder
 				
 				proxy_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, 1024, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
 				
-				fixup      = ''
-				
-				if( @@cached_major_version >= 23 ) # Tested against FF 23.0.1, 26.0, 27.0.1
+				if( @@cached_major_version >= 31 ) # Tested against FF 31
+					fixup = %Q{
+						test esi, esi
+						jz passthru_end2
+						mov eax, esi
+					}
+				elsif( @@cached_major_version >= 23 ) # Tested against FF 23.0.1, 26.0, 27.0.1
 					js_strtod_string_reg = 'esi' if not js_strtod_string_reg
-					
 					fixup = %Q{
 						test #{js_strtod_string_reg}, #{js_strtod_string_reg}
 						jz passthru_end2

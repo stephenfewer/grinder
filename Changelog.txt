@@ -10,6 +10,8 @@ Server
 
 Node
 ----
+	* Issue #32, Fix a nil class error, thanks Atul Alex Cherian (https://github.com/Aodrulez).
+	* Support latest FF, thanks soiax (https://github.com/soiax).
     * Fix HTTPS support for node logging to a Grinder Server, thanks sinn3r (https://github.com/wchen-r7).
 	* Fix an unexpected exception in configuration.rb when config.rb has $debugger_restart_minutes set to nil, thanks sinn3r (https://github.com/wchen-r7).
 

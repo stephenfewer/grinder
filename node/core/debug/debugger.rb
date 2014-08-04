@@ -47,7 +47,7 @@ module Grinder
 					
 					@callback_loadlibrary = lambda do | info |
 					
-						return if info[:st].lpimagename == 0
+						return if not info[:st].lpimagename
 					
 						name_ptr = @os_process.memory[info[:st].lpimagename, @os_process.addrsz / 8 ]
 						

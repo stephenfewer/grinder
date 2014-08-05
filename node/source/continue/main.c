@@ -37,6 +37,11 @@ BOOL CALLBACK enumproc( HWND hWnd, LPARAM lParam )
 			SendMessage( hWnd, BM_CLICK, 0 , 0 );
 			return FALSE;
 		}
+		else if( strcmp( cString, "Do&n't allow" ) == 0 )
+		{
+			SendMessage( hWnd, BM_CLICK, 0 , 0 );
+			return FALSE;
+		}
 
 	} while(0);
 

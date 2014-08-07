@@ -69,11 +69,9 @@
 			mysql_free_result( $result );
 		}
 		
-		/*
 		echo "<h3>Purge Database:</h3>";
 		echo "<p>Purge all crashes and nodes from the database.</p>";
 		echo "<div id='purge_db_button'>Purge</div>";
-		*/
 	}
 	
 	function show_users()
@@ -205,9 +203,12 @@
 				if( confirm( 'Are you sure you want to purge the database?' ) )
 				{
 					$.post( 'settings.php', { action:'purge_db' }, function( data ) {
+						
 						if( data != 'success' )
 							return error_alert( 'Failed to purge the database.', 'Error!' );
+						
 						error_alert( 'The user database has been purged', 'Success!' );
+						
 						refreshTab( 0 );
 					});
 				}

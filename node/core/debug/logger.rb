@@ -22,7 +22,11 @@ module Grinder
 				end
 				
 				def logger_file( pid )
-					"#{ @logdir }#{ @logdir.end_with?('\\') ? '' : '\\' }logger_#{ pid }.xml"
+					gen_logger_filename( "logger_#{ pid }" )
+				end
+				
+				def gen_logger_filename( name )
+					"#{ @logdir }#{ @logdir.end_with?('\\') ? '' : '\\' }#{ name }.xml"
 				end
 				
 				def loader_logger( imagebase )

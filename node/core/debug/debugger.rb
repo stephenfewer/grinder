@@ -507,6 +507,17 @@ module Grinder
 						end
 					end
 					
+					# record the memory at the registers before we perform the stack walk
+					# as the contents of ctx may be modified my the stackwalk api.
+					memory_log_data = ''
+					registers.each do | reg |
+						next if mem_prot( ctx[reg] ).strip.empty?
+						data = @os_process.memory[ ctx[reg], 128 ]
+						if( data )
+							memory_log_data << "Memory @ #{ '%s' % reg.downcase }:\n" << to_hex_dump( data, ctx[reg], 16, fmt )
+						end
+					end
+					
 					if( $old_debugger_stackwalk )
 						# Note: the old debugger stack walking technique is available by setting the
 						# global variable $old_debugger_stackwalk = true in your config.rb file.
@@ -589,15 +600,11 @@ module Grinder
 						log_data << "\n"
 					end
 					
-					log_data << "\n"
-					registers.each do | reg |
-						next if mem_prot( ctx[reg] ).strip.empty?
-						data = @os_process.memory[ ctx[reg], 128 ]
-						if( data )
-							log_data << "Memory @ #{ '%s' % reg.downcase }:\n" << to_hex_dump( data, ctx[reg], 16, fmt )
-						end
+					if( not memory_log_data.empty? )
+						log_data << "\n"
+						log_data << memory_log_data
 					end
-					
+										
 					if( not @attached[@pid].debugstrings.empty? )
 						log_data << "\nDebug Strings:\n"
 
@@ -666,7 +673,17 @@ module Grinder
 							
 							if( use_logger?( e.pid ) )
 							
-								log_data = e.save_log( logger_file( e.pid ) )
+								lfile = logger_file( e.pid )
+								
+								# If we don't have a log file for this PID, try to use the last modified log file.
+								# This is a last ditch effort in case the crash occurred in a separate process
+								# than the one being fuzzed. E.G. a Chrome GPU process crashes due to fuzzing in
+								# the renderer. YMMV.
+								if( not ::File.exists?( lfile ) )
+									lfile = ::Dir.glob( gen_logger_filename( "*" ) ).max_by { | f | ::File.mtime( f ) }
+								end
+							
+								log_data = e.save_log( lfile )
 								
 								if( not log_data )
 									print_error( "Failed to save the log file." )

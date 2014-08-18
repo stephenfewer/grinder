@@ -15,7 +15,8 @@ Node
 	* Support latest FF, thanks soiax (https://github.com/soiax).
 	* Fix HTTPS support for node logging to a Grinder Server, thanks sinn3r (https://github.com/wchen-r7).
 	* Fix an unexpected exception in configuration.rb when config.rb has $debugger_restart_minutes set to nil, thanks sinn3r (https://github.com/wchen-r7).
-
+	* Fix an issue where crash data may report incorrect memory dumps at the registers.
+	* Allow the debugger to search for the last modified log data file if none can be found for the process being debugged.
 
 
 Version 0.5 - 27 Feb 2014

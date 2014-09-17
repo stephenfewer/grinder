@@ -137,6 +137,12 @@ class Grinder
 		return true
 	end
 
+	def get_pids
+		pid_list = []
+		Metasm::WinOS.list_processes.sort_by {|p| pid_list << p.pid}
+		pid_list
+	end
+
 	def run
 	
 		if( not config_init( @config_file ) )
@@ -168,6 +174,11 @@ class Grinder
 		while( true )
 		
 			kill_thread  = nil
+
+			if $server_pid and !get_pids.include?($server_pid)
+				print_error("Grinder server is down")
+				$server_pid = nil
+			end
 
 			if( not $server_pid )
 				$server_pid = ::Process.spawn( "#{$ruby_vm} -I. .\\core\\server.rb --config=#{@config_file} --browser=#{@browser_type} #{ ( @fuzzer ? '--fuzzer='+@fuzzer : '' ) } #{ ( not @verbose ? '--quiet' : '' ) }" )

@@ -11,6 +11,7 @@ Server
 
 Node
 ----
+        * Issue #46, #40, Add a check to see if the node server is down or not, thanks sinn3r (https://github.com/wchen-r7).
 	* Issue #32, Fix a nil class error, thanks Atul Alex Cherian (https://github.com/Aodrulez).
 	* Support latest FF, thanks soiax (https://github.com/soiax).
 	* Fix HTTPS support for node logging to a Grinder Server, thanks sinn3r (https://github.com/wchen-r7).

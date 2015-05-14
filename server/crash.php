@@ -197,11 +197,13 @@
 	<body>
 		<script>
 			document.onkeypress = function(e) {
-				select = document.getElementById('crash_verified');
-				if(e.which == 48) select.value="Unknown"
-				else if (e.which == 49) select.value="Uninteresting"
-				else if (e.which == 50) select.value="Interesting"
-				else if (e.which == 51) select.value="Exploitable"
+				if ( document.activeElement.id !== "crash_notes" ) {
+					select = document.getElementById('crash_verified');
+					if(e.which == 48) select.value="Unknown"
+					else if (e.which == 49) select.value="Uninteresting"
+					else if (e.which == 50) select.value="Interesting"
+					else if (e.which == 51) select.value="Exploitable"
+				}
 			}
 		</script>
 		<script>

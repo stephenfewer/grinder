@@ -49,6 +49,9 @@ $server_address           = '127.0.0.1'
 # If you are runnning more than one node on the same system you will need to change this to avoid a conflict.
 $server_port              = 8080
 
+# Set this false if you do not want to generate mini crash dumps
+$save_minidump            = true
+
 ################################################################################
 #                     You probably dont need to edit these                     #
 ################################################################################

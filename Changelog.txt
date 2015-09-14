@@ -1,23 +1,25 @@
-Version 0.6-dev
-===============
+Version 0.6 - 14 Sept 2015
+==========================
 
 Server
 ------
-	* Settings tab now list all user account in the system.
-	* Settings tab now reports the Grinder Servers database size.
-	* Settings tab now lets you purge the database of all recorded crashes and nodes.
-	* System tab now reports the system wide average testcases per minute.
-	* Add/Delete user accounts is back working, thanks Juan Vazquez (https://github.com/jvazquez-r7). 
+    * Settings tab now list all user account in the system.
+    * Settings tab now reports the Grinder Servers database size.
+    * Settings tab now lets you purge the database of all recorded crashes and nodes.
+    * System tab now reports the system wide average testcases per minute.
+    * Add/Delete user accounts is back working, thanks Juan Vazquez (https://github.com/jvazquez-r7). 
 
 Node
 ----
-        * Issue #46, #40, Add a check to see if the node server is down or not, thanks sinn3r (https://github.com/wchen-r7).
-	* Issue #32, Fix a nil class error, thanks Atul Alex Cherian (https://github.com/Aodrulez).
-	* Support latest FF, thanks soiax (https://github.com/soiax).
-	* Fix HTTPS support for node logging to a Grinder Server, thanks sinn3r (https://github.com/wchen-r7).
-	* Fix an unexpected exception in configuration.rb when config.rb has $debugger_restart_minutes set to nil, thanks sinn3r (https://github.com/wchen-r7).
-	* Fix an issue where crash data may report incorrect memory dumps at the registers.
-	* Allow the debugger to search for the last modified log data file if none can be found for the process being debugged.
+    * Support creating Windows Minidump files for browser crashes, thanks HackSysTeam (https://twitter.com/HackSysTeam).
+    * Support latest FF, thanks HackSysTeam (https://twitter.com/HackSysTeam).
+    * Issue #46, #40, Add a check to see if the node server is down or not, thanks sinn3r (https://github.com/wchen-r7).
+    * Issue #32, Fix a nil class error, thanks Atul Alex Cherian (https://github.com/Aodrulez).
+    * Support latest FF, thanks soiax (https://github.com/soiax).
+    * Fix HTTPS support for node logging to a Grinder Server, thanks sinn3r (https://github.com/wchen-r7).
+    * Fix an unexpected exception in configuration.rb when config.rb has $debugger_restart_minutes set to nil, thanks sinn3r (https://github.com/wchen-r7).
+    * Fix an issue where crash data may report incorrect memory dumps at the registers.
+    * Allow the debugger to search for the last modified log data file if none can be found for the process being debugged.
 
 
 Version 0.5 - 27 Feb 2014
@@ -25,30 +27,29 @@ Version 0.5 - 27 Feb 2014
 
 Server
 ------
-	* Issue #5, session_is_registered() is depreciated, thanks sweetsyk00 (https://github.com/sweetsyk00).
-	* Added a 'Jump To' edit to jump to a specific page, thanks pyoor (https://github.com/pyoor).
-	* Modified crash display query to properly group based on verification status, thanks pyoor (https://github.com/pyoor).
-	* Make hash_quick a key for a perf boost, thanks Jason Kratzer.
-	* Added a delete crash button, thanks mutfuzz (https://github.com/mutfuzz).
-	* Set autofocus to user name input field, thanks mutfuzz (https://github.com/mutfuzz).
-	* Submit the login when user presses enter, thanks mutfuzz (https://github.com/mutfuzz).
-	
+    * Issue #5, session_is_registered() is depreciated, thanks sweetsyk00 (https://github.com/sweetsyk00).
+    * Added a 'Jump To' edit to jump to a specific page, thanks pyoor (https://github.com/pyoor).
+    * Modified crash display query to properly group based on verification status, thanks pyoor (https://github.com/pyoor).
+    * Make hash_quick a key for a perf boost, thanks Jason Kratzer.
+    * Added a delete crash button, thanks mutfuzz (https://github.com/mutfuzz).
+    * Set autofocus to user name input field, thanks mutfuzz (https://github.com/mutfuzz).
+    * Submit the login when user presses enter, thanks mutfuzz (https://github.com/mutfuzz).
+    
 Node
 ----
-	* Added Ruby 2.0 compatibility.
-	* Added 64-bit process debugging and logging support.
-	* Synced METASM to the latest version.
-	* Issue #20, fixed a one byte overflow in logger.c, thanks guhe120 (https://github.com/guhe120).
-	* Updated the dbghelp and symsrv bins.
-	* Handle timeouts from a Grinder server.
-	* Update GC support for Chrome into logging.js.
-	* Update browser detection for 64-bit IE11 into logging.js.
-	* Update hooking stubs for latest 32-bit IE 11, FireFox 27.0.1 and Chrome 33.0.
-	* Added hooking stub for latest 64 bit IE 11.
-	* Added config.rb setting $log_debug_messages to enable/disable debug message logging. Defaults to false for FireFox unless explicitly set, default to true for all other browsers.
-	* Use dbghelp!StackWalk64 to walk a threads stack during crash logging. This is more reliable and works on 32 and 64 bit threads. User can use the old call stack technique via "$old_debugger_stackwalk = true" config.rb setting if required.
-	* Crash dumps now include a hex dump for each register that points to valid memory, not just the stack pointer.
-
+    * Added Ruby 2.0 compatibility.
+    * Added 64-bit process debugging and logging support.
+    * Synced METASM to the latest version.
+    * Issue #20, fixed a one byte overflow in logger.c, thanks guhe120 (https://github.com/guhe120).
+    * Updated the dbghelp and symsrv bins.
+    * Handle timeouts from a Grinder server.
+    * Update GC support for Chrome into logging.js.
+    * Update browser detection for 64-bit IE11 into logging.js.
+    * Update hooking stubs for latest 32-bit IE 11, FireFox 27.0.1 and Chrome 33.0.
+    * Added hooking stub for latest 64 bit IE 11.
+    * Added config.rb setting $log_debug_messages to enable/disable debug message logging. Defaults to false for FireFox unless explicitly set, default to true for all other browsers.
+    * Use dbghelp!StackWalk64 to walk a threads stack during crash logging. This is more reliable and works on 32 and 64 bit threads. User can use the old call stack technique via "$old_debugger_stackwalk = true" config.rb setting if required.
+    * Crash dumps now include a hex dump for each register that points to valid memory, not just the stack pointer.
 
 
 Version 0.4 - 08 Jan 2013
@@ -56,10 +57,9 @@ Version 0.4 - 08 Jan 2013
 
 Node
 ----
-	* Debugger can skip potential orphan processes.
-	* Improve continue.exe to handle some FireFox dialogues.
-	* Fix hooking stubs for latest Safari and FireFox.
-
+    * Debugger can skip potential orphan processes.
+    * Improve continue.exe to handle some FireFox dialogues.
+    * Fix hooking stubs for latest Safari and FireFox.
 
 
 Version 0.3 - 02 Oct 2012
@@ -67,19 +67,18 @@ Version 0.3 - 02 Oct 2012
 
 Server
 ------
-	* Added a Fuzzer tab to allow users to view statistics (bar charts) about the fuzzers that have been run in the system. You can also drill down in to individual fuzzers to view what targets they are generating crashes on. Added bar chart support via jqPlot.
-	* Added a Settings tab. Moved the user account management features from the System tab into this new Settings tab.
-	
+    * Added a Fuzzer tab to allow users to view statistics (bar charts) about the fuzzers that have been run in the system. You can also drill down in to individual fuzzers to view what targets they are generating crashes on. Added bar chart support via jqPlot.
+    * Added a Settings tab. Moved the user account management features from the System tab into this new Settings tab.
+    
 Node
 ----
-	* Add in initial work for automated testcase reduction via .\node\reduction.rb
-	* Added IE10 support (As seen in Windows 8 Consumer Preview) (grinder\node\browser\internetexplorer.rb).
-	* Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Useful for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
-	* Added a --help and --version parameter to grinder.rb and testcase.rb.
-	* grinder_logger.dll is now thread safe and can handle log messages of an arbitrary size.
-	* Changed the server.rb 301 redirect to a 307 temporary redirect.
-	* Many small bug fixes!
-
+    * Add in initial work for automated testcase reduction via .\node\reduction.rb
+    * Added IE10 support (As seen in Windows 8 Consumer Preview) (grinder\node\browser\internetexplorer.rb).
+    * Added a --fuzzer parameter to grinder.rb. When bringing up a node you can now specify a single fuzzer to load instead of loading all the fuzzers in the nodes fuzzer directory. Useful for testing a specific fuzzer (e.g. >ruby grinder.rb --fuzzer=DOMBlaster2000 FF)
+    * Added a --help and --version parameter to grinder.rb and testcase.rb.
+    * grinder_logger.dll is now thread safe and can handle log messages of an arbitrary size.
+    * Changed the server.rb 301 redirect to a 307 temporary redirect.
+    * Many small bug fixes!
 
 
 Version 0.2 - 08 Feb 2012
@@ -87,26 +86,25 @@ Version 0.2 - 08 Feb 2012
 
 Wiki
 ----
-	* Added a step by step guide for installing a Grinder Node (https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node).
+    * Added a step by step guide for installing a Grinder Node (https://github.com/stephenfewer/grinder/wiki/Installing-a-Grinder-Node).
 
 Server
 ------
-	* Users can create e-mail alerts for when new unique crashes are generated or when new crashes have been pre verified as interesting/exploitable (upcoming feature).
+    * Users can create e-mail alerts for when new unique crashes are generated or when new crashes have been pre verified as interesting/exploitable (upcoming feature).
 
 Node
 ----
-	* Added initial Safari support (grinder\node\browser\safari.rb).
-	* When generating crash information, include the modules version and description in the processes module list.
-	* Added 301 redirect support to grinder\node\core\server.rb to catch edge cases where a fuzzer ends up trying a bogus request. Now gets redirected back to the fuzzer.
-	* Allow browser specific fuzzers via sub directories (IE/CM/FF/OP/SF) in the \grinder\node\fuzzers\ folder.
-	* Refactored the javascript portion of the logging out to grinder\node\data\logging.js so it can be updated without effecting existing fuzzers. Updated grinder\node\core\server.rb and grinder\node\fuzzers\SimpleExample.html to use this.
-	* Check for grinder_logger.dll in system32/syswow64 and copy if not there, then fail the system test if the copy fails.
-	* Bugfix for saving a log file when a concurrency issue prevents the temporary log file from being accessed or deleted.
-	* Removed the $webstats_update_minutes option from config.rb as it can lead to an inconsistency with the Grinder Server.
-
+    * Added initial Safari support (grinder\node\browser\safari.rb).
+    * When generating crash information, include the modules version and description in the processes module list.
+    * Added 301 redirect support to grinder\node\core\server.rb to catch edge cases where a fuzzer ends up trying a bogus request. Now gets redirected back to the fuzzer.
+    * Allow browser specific fuzzers via sub directories (IE/CM/FF/OP/SF) in the \grinder\node\fuzzers\ folder.
+    * Refactored the javascript portion of the logging out to grinder\node\data\logging.js so it can be updated without effecting existing fuzzers. Updated grinder\node\core\server.rb and grinder\node\fuzzers\SimpleExample.html to use this.
+    * Check for grinder_logger.dll in system32/syswow64 and copy if not there, then fail the system test if the copy fails.
+    * Bugfix for saving a log file when a concurrency issue prevents the temporary log file from being accessed or deleted.
+    * Removed the $webstats_update_minutes option from config.rb as it can lead to an inconsistency with the Grinder Server.
 
 
 Version 0.1 - 20 Jan 2012
 =========================
 
-	* Initial Release.
+    * Initial Release.

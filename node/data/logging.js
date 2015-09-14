@@ -58,7 +58,18 @@ function LOGGER( name )
 	{
 		if( this.browser == 'IE' )
 		{
-			CollectGarbage();
+			try
+			{
+				var arr = [];
+				
+				for( var i=0 ; i<(100000/0x34)+1 ; i++ )
+					arr.push( document.createElement( 'div' ) );
+				
+				arr = null;
+				
+				CollectGarbage();
+			}
+			catch( e1 ){}
 		}
 		else if( this.browser == 'CM' )
 		{

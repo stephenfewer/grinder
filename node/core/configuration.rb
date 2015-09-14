@@ -32,6 +32,8 @@ def config_init( config_file )
 			
 		eval( "$old_debugger_stackwalk = false" ) if $old_debugger_stackwalk == nil
 		
+		eval( "$save_minidump = false" ) if $save_minidump == nil
+		
 		if( $ruby_vm == nil )
 			target = ::Metasm::WinOS.find_process( ::Metasm::WinAPI.getcurrentprocessid() )
 		

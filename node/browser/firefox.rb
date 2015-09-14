@@ -53,44 +53,54 @@ module Grinder
 					print_error( "64-bit FireFox not supported." )
 					return
 				end
-						
-				if( path.include?( 'mozjs' ) )
+				
+				if( not ff_version )
+					print_error( "Unable to determine FireFox version for hooking." )
+					return
+				end
+				
+				if( @@cached_major_version >= 37 )
+					module_name = 'xul'
+				else
+					module_name = 'mozjs'
+				end
+				
+				if( path.include?( module_name ) )
 					@browser = 'FF'
 					if( not @attached[pid].jscript_loaded )
-						@attached[pid].jscript_loaded = loader_javascript( pid, addr )
+						@attached[pid].jscript_loaded = loader_javascript( pid, module_name, addr )
 					end
 				end
 			
 				@attached[pid].all_loaded = @attached[pid].jscript_loaded
 			end
 
-			def loader_javascript( pid, imagebase )
-				print_status( "mozjs.dll DLL loaded into process #{pid} @ 0x#{'%08X' % imagebase }" )
+			def loader_javascript( pid, module_name, imagebase )
+				print_status( "#{module_name}.dll DLL loaded into process #{pid} @ 0x#{'%08X' % imagebase }" )
 				
 				if( not @attached[pid].logmessage or not @attached[pid].finishedtest )
 					print_error( "Unable to hook JavaScript parseFloat() in process #{pid}, logger dll not injected." )
 					return false
 				end
 				
-				if( not ff_version )
-					print_error( "Unable to determine FireFox version for hooking." )
-					return false
-				end
+				symbol = "#{module_name}!num_parseFloat"
 				
-				symbol = 'mozjs!num_parseFloat'
-				
-				# hook mozjs!num_parseFloat to call LOGGER_logMessage/LOGGER_finishedTest
-				parsefloat = @attached[pid].name2address( imagebase, 'mozjs.dll', symbol )
+				# hook #{module_name}!num_parseFloat to call LOGGER_logMessage/LOGGER_finishedTest
+				parsefloat = @attached[pid].name2address( imagebase, "#{module_name}.dll", symbol )
 				if( not parsefloat )
 					print_error( "Unable to resolved #{symbol}" )
 					return false
 				end
 				
 				print_status( "Resolved #{symbol} @ 0x#{'%08X' % parsefloat }" )
-
-				symbol = 'mozjs!js_strtod'
 				
-				js_strtod = @attached[pid].name2address( imagebase, 'mozjs.dll', symbol )
+				if( module_name == 'mozjs' )
+					symbol = 'mozjs!js_strtod'
+				else
+					symbol = 'xul!js_strtod<wchar_t>'
+				end
+				
+				js_strtod = @attached[pid].name2address( imagebase, "#{module_name}.dll", symbol )
 				if( not js_strtod )
 					print_error( "Unable to resolved #{symbol}" )
 					return false
@@ -154,7 +164,13 @@ module Grinder
 				
 				proxy_addr = ::Metasm::WinAPI.virtualallocex( @os_process.handle, 0, 1024, ::Metasm::WinAPI::MEM_COMMIT|Metasm::WinAPI::MEM_RESERVE, ::Metasm::WinAPI::PAGE_EXECUTE_READWRITE )
 				
-				if( @@cached_major_version >= 31 ) # Tested against FF 31
+				if( @@cached_major_version >= 40 ) # Tested against FF 40.0.03
+					fixup = %Q{
+						test edi, edi
+						jz passthru_end2
+						mov eax, edi
+					}
+				elsif( @@cached_major_version >= 31 ) # Tested against FF 31
 					fixup = %Q{
 						test esi, esi
 						jz passthru_end2

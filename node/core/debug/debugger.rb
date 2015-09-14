@@ -85,6 +85,8 @@ module Grinder
 						
 						return if not info
 						
+						@@crash_info_for_minidump = info
+						
 						if( info[:type] == 'breakpoint' )
 							@continuecode = ::Metasm::WinAPI::DBG_CONTINUE
 							return
@@ -657,6 +659,10 @@ module Grinder
 						run_forever
 					rescue Grinder::Core::Debug::DebuggerException => e
 					
+						if ( $save_minidump and not @reduction )
+							e.save_minidump(@os_process.handle, @os_thread.tid, @@crash_info_for_minidump[:st], @os_thread.context.c_struct)
+						end
+						
 						# stop debugging this process!
 						::Metasm::WinAPI.debugactiveprocessstop( e.pid )
 

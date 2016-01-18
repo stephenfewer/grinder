@@ -151,6 +151,11 @@ Please file all bug reports via GitHub at the following address: https://github.
 
 Please submit all code contributions as pull requests via GitHub, thanks!.
 
+Donations
+=========
+
+If you find Grinder useful, please consider a Bitcoin donation to 12cS37zQSvAGEokQJfWzhwyeGPBA2SwCxQ, thanks!
+
 License
 =======
 

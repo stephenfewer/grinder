@@ -116,7 +116,7 @@
 		
 		if( user_isadministrator() )
 		{
-			if( user_valid_password( $password ) or !ser_valid_username( $name ) )
+			if( user_valid_password( $password ) and user_valid_username( $name ) )
 			{
 				$sql  = "INSERT INTO users ( name, email, password, type ) VALUES ";
 				$sql .= "( '" . mysql_real_escape_string( $name ) . "', '" . mysql_real_escape_string( $email ) . "', '" . mysql_real_escape_string( sha1( GRINDER_SALT . $password ) ) . "', '" . mysql_real_escape_string( $type ) . "' );";

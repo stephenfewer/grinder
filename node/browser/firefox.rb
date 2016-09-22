@@ -97,7 +97,7 @@ module Grinder
 				if( module_name == 'mozjs' )
 					symbol = 'mozjs!js_strtod'
 				else
-					symbol = 'xul!js_strtod<wchar_t>'
+					symbol = 'xul!js_strtod<char16_t>'
 				end
 				
 				js_strtod = @attached[pid].name2address( imagebase, "#{module_name}.dll", symbol )

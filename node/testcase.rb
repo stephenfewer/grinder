@@ -107,7 +107,7 @@ class Testcase
 		end
 		
 		# merge in the command line options over the options from the config file.
-		@opts = $testcase_opts.merge( @opts )
+		@opts = @opts.merge($testcase_opts)
 		
 		html = xmlcrashlog.generate_html( @opts, @skip_elem )
 		

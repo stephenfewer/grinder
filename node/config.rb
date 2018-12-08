@@ -22,7 +22,7 @@ $webstats_password        = nil
 $webstats_https           = false
 
 # The path to your local symbol cache (must be able to write to this dir)
-$symbols_dir              = 'C:\\symbols\\'
+$symbols_dir              = '.\\symbols\\'
 
 ################################################################################
 #                     You might need to edit these to suit                     #
@@ -59,7 +59,7 @@ $save_minidump            = false
 # The temporary location to write the log files during fuzzing (must be writeable from a Low integrity process).
 # Note: %USERNAME% will be resolved at run time to the current user running the node.
 # Note: You can also use a RAM Disk for this location as it is only for temporary logging while the fuzzers are running (Still must be writeable from a Low integrity process).
-$logger_dir               = 'C:\\Users\\%USERNAME%\\AppData\\Local\\Temp\\Low\\'
+$logger_dir               = '.\\templog\\'
 # On older systems (2003/XP) you will need to use this directory...
 #$logger_dir              = 'C:\\Documents and Settings\\%USERNAME%\\Local Settings\\Temp\\'
 
